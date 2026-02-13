@@ -39,13 +39,13 @@ type FormattedOutput struct {
 func FormatOutput(output FormattedOutput) string {
 	switch output.Type {
 	case OutputTypeToolCall:
-		return fmt.Sprintf("\n🔧 [工具调用] %s\n", output.Content)
+		return fmt.Sprintf("\n[工具调用] %s\n", output.Content)
 	case OutputTypeToolResult:
-		return fmt.Sprintf("📊 [工具结果] %s\n", output.Content)
+		return fmt.Sprintf("[工具结果] %s\n", output.Content)
 	case OutputTypeThinking:
-		return fmt.Sprintf("🤔 [思考中] %s\n", output.Content)
+		return fmt.Sprintf("[思考中] %s\n", output.Content)
 	case OutputTypeNormal:
-		return output.Content
+		return output.Content + "\n\n"
 	default:
 		return output.Content
 	}
@@ -106,6 +106,8 @@ func handleAIOutput(msgOutput *adk.MessageVariant, lastMessage **schema.Message)
 
 			*lastMessage = msg
 		}
+		// 流式输出结束后添加换行
+		fmt.Println()
 	} else if msgOutput.Message != nil {
 		// 处理非流式输出
 		msg := msgOutput.Message
@@ -114,7 +116,12 @@ func handleAIOutput(msgOutput *adk.MessageVariant, lastMessage **schema.Message)
 		if len(msg.ToolCalls) > 0 {
 			printToolCalls(msg.ToolCalls)
 		} else {
-			fmt.Print(msg.Content)
+			// 普通文本输出
+			output := FormatOutput(FormattedOutput{
+				Type:    OutputTypeNormal,
+				Content: msg.Content,
+			})
+			fmt.Print(output)
 		}
 
 		*lastMessage = msg

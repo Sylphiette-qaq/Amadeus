@@ -43,6 +43,8 @@ func StreamResponse(ctx context.Context, runner *adk.Runner, query string, isFir
 
 	// 处理对话结果
 	for {
+
+		// 读取事件，Eino框架为事件驱动
 		event, ok := iter.Next()
 		if !ok {
 			break
@@ -53,7 +55,7 @@ func StreamResponse(ctx context.Context, runner *adk.Runner, query string, isFir
 			return
 		}
 
-		// 处理消息输出
+		// 处理消息事件
 		if event.Output != nil && event.Output.MessageOutput != nil {
 			msgOutput := event.Output.MessageOutput
 

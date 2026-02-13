@@ -43,7 +43,7 @@ func GetAgent(ctx context.Context) *adk.ChatModelAgent {
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools: []tool.BaseTool{
-					tools.GetAddTodoTool(),
+					tools.GetCalculatorTool(),
 				},
 			},
 		},

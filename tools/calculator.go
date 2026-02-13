@@ -9,7 +9,7 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-func GetAddTodoTool() tool.InvokableTool {
+func GetCalculatorTool() tool.InvokableTool {
 	info := &schema.ToolInfo{
 		Name: "add",
 		Desc: "当用户请求进行数学计算、加法运算或询问两个数字的和时，必须调用此工具。支持整数和浮点数计算。",
@@ -27,10 +27,10 @@ func GetAddTodoTool() tool.InvokableTool {
 		}),
 	}
 
-	return utils.NewTool(info, AddTodoFunc)
+	return utils.NewTool(info, CalculatorFunc)
 }
 
-func AddTodoFunc(_ context.Context, params map[string]interface{}) (string, error) {
+func CalculatorFunc(_ context.Context, params map[string]interface{}) (string, error) {
 	num1Val, ok := params["num1"]
 	if !ok {
 		return "", fmt.Errorf("参数num1缺失")
