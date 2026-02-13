@@ -1,11 +1,10 @@
 package utils
 
 import (
-	"Amadeus/prompt"
 	"context"
-	"strings"
+	"fmt"
 
-	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino/flow/agent/react"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -13,10 +12,9 @@ import (
 // 参数:
 //
 //	ctx: 上下文
-//	runner: 运行器
+//	agent: React Agent
 //	query: 用户查询
-//	isFirst: 是否首次对话
-func StreamResponse(ctx context.Context, runner *adk.Runner, query string, isFirst bool) {
+func StreamResponse(ctx context.Context, agent *react.Agent, query string) {
 
 	// 加载上下文
 	history := LoadContext()
@@ -26,52 +24,33 @@ func StreamResponse(ctx context.Context, runner *adk.Runner, query string, isFir
 	// 初始化消息列表
 	var messages []*schema.Message
 
-	// 首次对话使用系统提示词模板
-	if isFirst {
-		messages, _ = prompt.GetMessage(ctx, history, query)
-	} else {
-		// 非首次对话直接使用历史上下文
-		messages = append(history, schema.UserMessage(query))
+	// 非首次对话直接使用历史上下文
+	messages = append(history, schema.UserMessage(query))
+
+	// 运行对话 - 使用Stream方法
+	stream, err := agent.Stream(ctx, messages)
+	if err != nil {
+		fmt.Printf("运行Agent失败: %v\n", err)
+		return
 	}
 
-	// 运行对话
-	iter := runner.Run(ctx, messages, adk.WithCheckPointID("default"))
-
-	// 初始化变量
-	var lastMessage *schema.Message
-	var toolCallOutput strings.Builder
-
-	// 处理对话结果
+	// 读取流式输出
+	var result *schema.Message
 	for {
-
-		// 读取事件，Eino框架为事件驱动
-		event, ok := iter.Next()
-		if !ok {
+		msg, err := stream.Recv()
+		if err != nil {
 			break
 		}
-
-		// 处理错误
-		if event.Err != nil {
-			return
-		}
-
-		// 处理消息事件
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			msgOutput := event.Output.MessageOutput
-
-			// 检查是否为工具输出（通过ToolName字段判断）
-			if msgOutput.ToolName != "" {
-				// 处理工具输出
-				handleToolOutput(msgOutput, &toolCallOutput)
-			} else {
-				// 处理普通AI输出
-				handleAIOutput(msgOutput, &lastMessage)
-			}
+		if msg != nil {
+			result = msg
+			fmt.Print(msg.Content)
 		}
 	}
 
+	fmt.Println()
+
 	// 保存助手回复
-	if lastMessage != nil {
-		SaveMessage(lastMessage.Role, lastMessage.Content)
+	if result != nil {
+		SaveMessage(schema.Assistant, result.Content)
 	}
 }

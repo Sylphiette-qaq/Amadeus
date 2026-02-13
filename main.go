@@ -5,20 +5,13 @@ import (
 	"Amadeus/utils"
 	"context"
 	"fmt"
-
-	"github.com/cloudwego/eino/adk"
 )
 
 func main() {
 	ctx := context.Background()
 
-	// 创建 Agent 和 Runner
+	// 创建 Agent
 	agent := agent.GetAgent(ctx)
-	runner := adk.NewRunner(ctx, adk.RunnerConfig{
-		Agent: agent,
-	})
-
-	isFirst := true
 
 	for {
 		userQuestion, err := utils.ReadUserInput()
@@ -31,7 +24,6 @@ func main() {
 			return
 		}
 
-		utils.StreamResponse(ctx, runner, userQuestion, isFirst)
-		isFirst = false
+		utils.StreamResponse(ctx, agent, userQuestion)
 	}
 }

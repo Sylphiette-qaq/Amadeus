@@ -6,17 +6,17 @@ import (
 	"log"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
-	"github.com/cloudwego/eino/adk"
+	"github.com/cloudwego/eino-ext/components/tool/mcp"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
+	"github.com/cloudwego/eino/flow/agent/react"
 )
 
 var (
-	ModelType                    = "deepseek-chat"
-	ownerAPIKey                  = "sk-ab95814d25f54a02aaee43f062926e2c"
-	modelURL                     = "https://api.deepseek.com"
-	SystemMessageDefaultTemplate = `你是一个{role}。你需要用{style}的语气回答问题。`
-	UserMessageDefaultTemplate   = `{question}`
+	ModelType     = "deepseek-chat"
+	ownerAPIKey   = "sk-ab95814d25f54a02aaee43f062926e2c"
+	modelURL      = "https://api.deepseek.com"
+	SystemMessage = `你是一个人工智能助手，名称是Amadeus。你需要用语气平淡，内容简洁且专业的语气回答问题。`
 )
 
 func GetChatModel(ctx context.Context) *deepseek.ChatModel {
@@ -32,20 +32,31 @@ func GetChatModel(ctx context.Context) *deepseek.ChatModel {
 	return chatModel
 }
 
-func GetAgent(ctx context.Context) *adk.ChatModelAgent {
+func GetAgent(ctx context.Context) *react.Agent {
 	chatModel := GetChatModel(ctx)
 
-	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
-		Name:        "Amadeus",
-		Description: "一个人工智能助手，名称叫Amadeus",
-		Instruction: SystemMessageDefaultTemplate,
-		Model:       chatModel,
-		ToolsConfig: adk.ToolsConfig{
-			ToolsNodeConfig: compose.ToolsNodeConfig{
-				Tools: []tool.BaseTool{
-					tools.GetCalculatorTool(),
-				},
-			},
+	// 从配置文件创建MCP客户端
+	clients, err := tools.CreateMcpClientsFromConfig(ctx, "./tools/toolsConfig.json")
+	if err != nil {
+		log.Fatalf("创建MCP客户端失败: %v", err)
+	}
+
+	// 从所有MCP客户端获取工具
+	var allTools []tool.BaseTool
+	for _, cli := range clients {
+		tools, err := mcp.GetTools(ctx, &mcp.Config{Cli: cli})
+		if err != nil {
+			log.Printf("获取工具失败: %v", err)
+			continue
+		}
+		allTools = append(allTools, tools...)
+	}
+
+	agent, err := react.NewAgent(ctx, &react.AgentConfig{
+		ModelNodeName:    "Amadeus",
+		ToolCallingModel: chatModel,
+		ToolsConfig: compose.ToolsNodeConfig{
+			Tools: allTools,
 		},
 	})
 
