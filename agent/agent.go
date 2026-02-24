@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
 	"github.com/cloudwego/eino/flow/agent/react"
+	"github.com/cloudwego/eino/schema"
 )
 
 var (
@@ -52,11 +53,21 @@ func GetAgent(ctx context.Context) *react.Agent {
 		allTools = append(allTools, tools...)
 	}
 
+	allTools = append(allTools, tools.GetCalculatorTool())
+
 	agent, err := react.NewAgent(ctx, &react.AgentConfig{
 		ModelNodeName:    "Amadeus",
 		ToolCallingModel: chatModel,
 		ToolsConfig: compose.ToolsNodeConfig{
 			Tools: allTools,
+		},
+
+		MessageModifier: func(ctx context.Context, input []*schema.Message) []*schema.Message {
+			res := make([]*schema.Message, 0, len(input)+1)
+
+			res = append(res, schema.SystemMessage("你是一个人工智能助手，名字叫Amadeus"))
+			res = append(res, input...)
+			return res
 		},
 	})
 
