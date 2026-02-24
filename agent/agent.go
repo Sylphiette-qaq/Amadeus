@@ -7,10 +7,9 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	"github.com/cloudwego/eino-ext/components/tool/mcp"
+	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
-	"github.com/cloudwego/eino/flow/agent/react"
-	"github.com/cloudwego/eino/schema"
 )
 
 var (
@@ -33,7 +32,7 @@ func GetChatModel(ctx context.Context) *deepseek.ChatModel {
 	return chatModel
 }
 
-func GetAgent(ctx context.Context) *react.Agent {
+func GetAgent(ctx context.Context) *adk.ChatModelAgent {
 	chatModel := GetChatModel(ctx)
 
 	// 从配置文件创建MCP客户端
@@ -55,19 +54,17 @@ func GetAgent(ctx context.Context) *react.Agent {
 
 	allTools = append(allTools, tools.GetCalculatorTool())
 
-	agent, err := react.NewAgent(ctx, &react.AgentConfig{
-		ModelNodeName:    "Amadeus",
-		ToolCallingModel: chatModel,
-		ToolsConfig: compose.ToolsNodeConfig{
-			Tools: allTools,
-		},
-
-		MessageModifier: func(ctx context.Context, input []*schema.Message) []*schema.Message {
-			res := make([]*schema.Message, 0, len(input)+1)
-
-			res = append(res, schema.SystemMessage("你是一个人工智能助手，名字叫Amadeus"))
-			res = append(res, input...)
-			return res
+	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
+		Name:        "intelligent_assistant",
+		Description: "An intelligent assistant capable of using multiple tools to solve complex problems",
+		Instruction: "You are a professional assistant who can use the provided tools to help users solve problems",
+		Model:       chatModel,
+		ToolsConfig: adk.ToolsConfig{
+			ToolsNodeConfig: compose.ToolsNodeConfig{
+				Tools: allTools,
+			},
+			ReturnDirectly:     nil,
+			EmitInternalEvents: false,
 		},
 	})
 
