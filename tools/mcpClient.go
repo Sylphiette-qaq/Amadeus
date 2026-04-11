@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -41,6 +42,8 @@ func LoadToolsConfig(filePath string) (*ToolsConfig, error) {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("解析配置文件失败: %v", err)
 	}
+
+	resolveConfigEnv(&config)
 
 	return &config, nil
 }
@@ -130,4 +133,29 @@ func CreateMcpClientsFromConfig(ctx context.Context, configPath string) ([]clien
 	}
 
 	return clients, nil
+}
+
+func resolveConfigEnv(config *ToolsConfig) {
+	for serverName, serverConfig := range config.MCPServers {
+		if len(serverConfig.Env) == 0 {
+			continue
+		}
+
+		resolvedEnv := make(map[string]string, len(serverConfig.Env))
+		for key, value := range serverConfig.Env {
+			resolvedEnv[key] = resolveEnvPlaceholder(value)
+		}
+
+		serverConfig.Env = resolvedEnv
+		config.MCPServers[serverName] = serverConfig
+	}
+}
+
+func resolveEnvPlaceholder(value string) string {
+	if strings.HasPrefix(value, "${") && strings.HasSuffix(value, "}") {
+		envKey := strings.TrimSuffix(strings.TrimPrefix(value, "${"), "}")
+		return os.Getenv(envKey)
+	}
+
+	return value
 }

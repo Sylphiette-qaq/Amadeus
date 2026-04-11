@@ -30,7 +30,7 @@ func StreamResponse(ctx context.Context, ag *adk.ChatModelAgent, query string) {
 
 	agentInput = &adk.AgentInput{
 		messages,
-		true,
+		false,
 	}
 
 	// 运行对话

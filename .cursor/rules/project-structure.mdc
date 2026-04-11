@@ -1,0 +1,136 @@
+---
+description: Amadeus 项目结构规则和代码组织约定
+alwaysApply: true
+---
+
+# Amadeus 项目结构规则
+
+## 项目概述
+
+Amadeus 是一个基于 Cloudwego Eino 框架的 Go 语言 AI 助手应用，支持流式对话和工具调用。
+
+## 目录结构
+
+```
+Amadeus/
+├── agent/          # Agent 配置和初始化
+│   └── agent.go    # Agent 创建和配置逻辑
+├── checkpoints/    # 对话历史存储（运行时生成）
+├── prompt/         # 提示词相关
+│   └── main.go     # 提示词处理逻辑
+├── tools/          # 工具集成
+│   ├── calculator.go    # 内置计算器工具
+│   ├── mcpClient.go     # MCP 客户端封装
+│   └── toolsConfig.json # MCP 工具配置文件
+├── utils/          # 工具函数
+│   ├── input.go    # 用户输入处理
+│   ├── output.go   # 输出格式化
+│   ├── stream.go   # 流式响应处理
+│   └── memory.go   # 对话历史管理
+├── main.go         # 程序入口
+├── go.mod          # Go 模块定义
+└── README.md       # 项目文档
+```
+
+## 包组织原则
+
+### 1. agent/ 包
+- **职责**: Agent 的创建、配置和初始化
+- **约定**:
+  - 导出 `GetAgent()` 函数用于创建 Agent 实例
+  - 导出 `GetChatModel()` 函数用于创建聊天模型
+  - 配置常量（如 API Key、模型类型）应在包内定义
+  - 系统消息和提示词配置在此包中管理
+
+### 2. tools/ 包
+- **职责**: 工具集成和工具定义
+- **约定**:
+  - 每个工具应导出 `GetXxxTool()` 函数返回工具实例
+  - 工具函数应遵循 `func(context.Context, map[string]interface{}) (string, error)` 签名
+  - MCP 客户端配置从 `toolsConfig.json` 读取
+  - 工具描述应清晰明确，便于 AI 理解何时调用
+
+### 3. utils/ 包
+- **职责**: 通用工具函数和辅助功能
+- **约定**:
+  - `input.go`: 处理用户输入读取
+  - `output.go`: 格式化输出显示
+  - `stream.go`: 流式响应处理，包含回调函数
+  - `memory.go`: 对话历史加载和保存
+  - 函数应专注于单一职责
+
+### 4. prompt/ 包
+- **职责**: 提示词相关处理
+- **约定**:
+  - 提示词模板和格式化逻辑
+  - 系统提示词配置
+
+## 代码规范
+
+### 导入顺序
+```go
+// 1. 标准库
+import (
+    "context"
+    "fmt"
+)
+
+// 2. 第三方库
+import (
+    "github.com/cloudwego/eino/..."
+)
+
+// 3. 项目内部包
+import (
+    "Amadeus/agent"
+    "Amadeus/utils"
+)
+```
+
+### 错误处理
+- 使用 `log.Fatal()` 处理致命错误（如初始化失败）
+- 使用 `log.Printf()` 记录非致命错误
+- 函数应返回 `error` 类型，调用方负责处理
+
+### 上下文传递
+- 所有涉及网络请求或长时间运行的操作都应接受 `context.Context` 参数
+- 使用 `context.Background()` 作为根上下文
+
+### 命名约定
+- 包名使用小写单数形式
+- 导出函数使用驼峰命名，首字母大写
+- 工具函数命名：`GetXxxTool()` 用于获取工具实例
+- 配置变量使用驼峰命名，如 `ModelType`, `ownerAPIKey`
+
+## 新增代码时的注意事项
+
+1. **添加新工具**:
+   - 在 `tools/` 目录下创建新文件
+   - 实现 `GetXxxTool()` 函数
+   - 在 `agent/agent.go` 的 `GetAgent()` 函数中注册工具
+
+2. **添加新的工具函数**:
+   - 根据功能分类放入 `utils/` 目录的相应文件
+   - 或创建新的工具文件（如 `utils/xxx.go`）
+
+3. **修改 Agent 配置**:
+   - 在 `agent/agent.go` 中修改
+   - 注意保持配置的集中管理
+
+4. **添加新的依赖**:
+   - 使用 `go get` 添加依赖
+   - 确保版本兼容性
+
+## 文件命名约定
+
+- Go 源文件使用小写字母和下划线：`mcpClient.go`
+- 配置文件使用 JSON 格式：`toolsConfig.json`
+- 测试文件以 `_test.go` 结尾
+
+## 依赖管理
+
+- 使用 Go Modules (`go.mod`)
+- 主要依赖：
+  - `github.com/cloudwego/eino`: 核心框架
+  - `github.com/cloudwego/eino-ext`: 扩展组件（DeepSeek、MCP）
+  - `github.com/mark3labs/mcp-go`: MCP 协议实现

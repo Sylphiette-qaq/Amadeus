@@ -2,16 +2,32 @@ package main
 
 import (
 	"Amadeus/agent"
+	"Amadeus/orchestrator"
+	"Amadeus/tools"
 	"Amadeus/utils"
 	"context"
 	"fmt"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
 	ctx := context.Background()
 
-	// 创建 Agent
-	agent := agent.GetAgent(ctx)
+	_ = godotenv.Load()
+
+	chatModel := agent.GetChatModel(ctx)
+	availableTools, err := tools.LoadInvokableTools(ctx, "./tools/toolsConfig.json")
+	if err != nil {
+		fmt.Println("初始化工具失败：", err)
+		return
+	}
+
+	orch, err := orchestrator.New(ctx, chatModel, availableTools)
+	if err != nil {
+		fmt.Println("初始化编排器失败：", err)
+		return
+	}
 
 	for {
 		userQuestion, err := utils.ReadUserInput()
@@ -24,6 +40,8 @@ func main() {
 			return
 		}
 
-		utils.StreamResponse(ctx, agent, userQuestion)
+		if err := orch.HandleTurn(ctx, userQuestion); err != nil {
+			fmt.Println("处理请求失败：", err)
+		}
 	}
 }
