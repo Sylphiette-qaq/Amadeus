@@ -139,6 +139,32 @@
 4. CLI 接入编排器
 5. 最小闭环验证
 
+### 当前目录落位
+
+当前实现已按目标文档推荐方向完成第一轮目录迁移：
+
+- CLI 入口迁移到 `cmd/amadeus/main.go`
+- 模型初始化迁移到 `internal/model/chat_model.go`
+- 编排层拆分到：
+  - `internal/orchestrator/orchestrator.go`
+  - `internal/orchestrator/loop.go`
+  - `internal/orchestrator/parser.go`
+  - `internal/orchestrator/policy.go`
+- 工具体系迁移到：
+  - `internal/tool/registry.go`
+  - `internal/tool/executor.go`
+  - `internal/tool/mcp.go`
+  - `internal/tool/calculator.go`
+- 记忆层迁移到：
+  - `internal/memory/store.go`
+  - `internal/memory/serializer.go`
+- 会话状态已新增到 `internal/session/state.go`
+- 终端交互已迁移到：
+  - `internal/presentation/input.go`
+  - `internal/presentation/output.go`
+
+当前仍保留 `utils/` 下部分旧文件，仅作为未清理的兼容/遗留代码，不再承载新的主链路。
+
 ### 退出条件
 
 - 用户请求由项目自有编排器驱动
@@ -282,10 +308,10 @@
 |------|------|
 | 当前阶段 | M1 |
 | 阶段状态 | 进行中 |
-| 本周完成 | 已完成 M0 基线扫描；已拆出纯 ChatModel 初始化入口；已新增最小手动编排器并替换 `main.go` 主链路；已移除主模型配置中的硬编码密钥；已将 MCP 配置改为环境变量占位符 |
-| 下周计划 | 继续 M1 联调，验证无工具问答、单工具闭环和最大轮次终止；随后进入 M2 的工具注册与结构化存储 |
+| 本周完成 | 已完成 M0 基线扫描；已拆出纯 ChatModel 初始化入口；已新增最小手动编排器并替换主链路；已将目录迁移到 `cmd/amadeus + internal/*` 结构；已移除主模型配置中的硬编码密钥；已将 MCP 配置改为环境变量占位符 |
+| 下周计划 | 继续 M1 联调，验证无工具问答、单工具闭环和最大轮次终止；清理遗留 `utils/` 旧链路；随后进入 M2 的结构化存储增强 |
 | 阻塞项 | 无 |
-| 备注 | `go test ./...` 已通过；当前缺少真实模型和工具调用联调结果 |
+| 备注 | `go test ./...` 已通过；当前目录结构已切到目标分层，剩余主要是联调与遗留清理 |
 
 ### 9.3 任务清单
 
@@ -297,14 +323,15 @@
 | T04 | 接入 OpenAI `tool_calls` 解析 | M1 | 已完成 | P0 | 已基于 `schema.Message.ToolCalls` 处理工具调用与 `role: tool` 回填 |
 | T05 | 打通单工具闭环 | M1 | 进行中 | P0 | 代码路径已就绪，待真实模型与工具联调验证 |
 | T06 | 引入最大轮次和异常终止 | M1 | 已完成 | P0 | 已支持 `AMADEUS_MAX_TURNS` 和异常响应保护 |
-| T07 | 建立 ToolRegistry | M2 | 未开始 | P1 |  |
-| T08 | 建立 ToolExecutor | M2 | 未开始 | P1 |  |
-| T09 | MCP 工具统一注册 | M2 | 未开始 | P1 |  |
-| T10 | 会话存储升级为结构化格式 | M2 | 未开始 | P1 |  |
-| T11 | 增加 trace 与审计日志 | M3 | 未开始 | P1 |  |
-| T12 | 增加策略控制与上下文治理 | M3 | 未开始 | P1 |  |
-| T13 | 补齐最小验收测试集 | M4 | 未开始 | P0 |  |
-| T14 | 清理硬编码密钥和旧链路 | M4 | 未开始 | P0 |  |
+| T07 | 按目标文档迁移目录结构到 `cmd/` 与 `internal/` | M1 | 已完成 | P0 | 主链路代码已迁移到 `cmd/amadeus` 和 `internal/*` |
+| T08 | 建立 ToolRegistry | M2 | 未开始 | P1 |  |
+| T09 | 建立 ToolExecutor | M2 | 未开始 | P1 |  |
+| T10 | MCP 工具统一注册 | M2 | 未开始 | P1 |  |
+| T11 | 会话存储升级为结构化格式 | M2 | 未开始 | P1 |  |
+| T12 | 增加 trace 与审计日志 | M3 | 未开始 | P1 |  |
+| T13 | 增加策略控制与上下文治理 | M3 | 未开始 | P1 |  |
+| T14 | 补齐最小验收测试集 | M4 | 未开始 | P0 |  |
+| T15 | 清理硬编码密钥和旧链路 | M4 | 未开始 | P0 |  |
 
 ## 10. 验收标准
 

@@ -1,15 +1,15 @@
-package tools
+package tool
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/cloudwego/eino/components/tool"
-	"github.com/cloudwego/eino/components/tool/utils"
+	einotool "github.com/cloudwego/eino/components/tool"
+	toolutils "github.com/cloudwego/eino/components/tool/utils"
 	"github.com/cloudwego/eino/schema"
 )
 
-func GetCalculatorTool() tool.InvokableTool {
+func GetCalculatorTool() einotool.InvokableTool {
 	info := &schema.ToolInfo{
 		Name: "add",
 		Desc: "当用户请求进行数学计算、加法运算或询问两个数字的和时，必须调用此工具。支持整数和浮点数计算。",
@@ -27,10 +27,10 @@ func GetCalculatorTool() tool.InvokableTool {
 		}),
 	}
 
-	return utils.NewTool(info, CalculatorFunc)
+	return toolutils.NewTool(info, calculatorFunc)
 }
 
-func CalculatorFunc(_ context.Context, params map[string]interface{}) (string, error) {
+func calculatorFunc(_ context.Context, params map[string]interface{}) (string, error) {
 	num1Val, ok := params["num1"]
 	if !ok {
 		return "", fmt.Errorf("参数num1缺失")
@@ -40,8 +40,7 @@ func CalculatorFunc(_ context.Context, params map[string]interface{}) (string, e
 	if !ok {
 		return "", fmt.Errorf("参数num2缺失")
 	}
-	sum := num1Val.(float64) + num2Val.(float64)
 
-	result := fmt.Sprintf("计算结果：%f + %f = %f", num1Val, num2Val, sum)
-	return result, nil
+	sum := num1Val.(float64) + num2Val.(float64)
+	return fmt.Sprintf("计算结果：%f + %f = %f", num1Val, num2Val, sum), nil
 }

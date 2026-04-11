@@ -1,10 +1,10 @@
 package main
 
 import (
-	"Amadeus/agent"
-	"Amadeus/orchestrator"
-	"Amadeus/tools"
-	"Amadeus/utils"
+	"Amadeus/internal/model"
+	"Amadeus/internal/orchestrator"
+	"Amadeus/internal/presentation"
+	internaltool "Amadeus/internal/tool"
 	"context"
 	"fmt"
 
@@ -16,21 +16,27 @@ func main() {
 
 	_ = godotenv.Load()
 
-	chatModel := agent.GetChatModel(ctx)
-	availableTools, err := tools.LoadInvokableTools(ctx, "./tools/toolsConfig.json")
+	chatModel := model.GetChatModel(ctx)
+	availableTools, err := internaltool.LoadInvokableTools(ctx, "./tools/toolsConfig.json")
 	if err != nil {
 		fmt.Println("初始化工具失败：", err)
 		return
 	}
 
-	orch, err := orchestrator.New(ctx, chatModel, availableTools)
+	executor, err := internaltool.NewExecutor(ctx, availableTools)
+	if err != nil {
+		fmt.Println("初始化工具执行器失败：", err)
+		return
+	}
+
+	orch, err := orchestrator.New(chatModel, executor, model.SystemMessage)
 	if err != nil {
 		fmt.Println("初始化编排器失败：", err)
 		return
 	}
 
 	for {
-		userQuestion, err := utils.ReadUserInput()
+		userQuestion, err := presentation.ReadUserInput()
 		if err != nil {
 			fmt.Println("读取输入时发生错误：", err)
 			return
