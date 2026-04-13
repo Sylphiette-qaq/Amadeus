@@ -48,3 +48,86 @@
 
 请告诉我您想要查看的文件路径。
 [2026-04-12 11:52:13] user: 分析一下当前项目
+[2026-04-13 14:30:58] user: 简单介绍一下当前项目
+[2026-04-13 14:31:31] assistant: 基于对项目结构的分析，以下是当前项目的简要介绍：
+
+## 项目概述
+
+**Amadeus** 是一个基于 Cloudwego Eino 框架的 AI 助手应用，使用 Go 语言开发。项目主要特点：
+
+### 核心功能
+- **流式对话输出**：支持实时流式响应
+- **工具调用集成**：支持 MCP (Model Context Protocol) 工具
+- **对话历史管理**：自动保存对话历史到 checkpoints 目录
+- **多工具支持**：内置计算器工具，可扩展其他工具
+
+### 技术架构
+- **框架**：Cloudwego Eino v0.7.32
+- **AI 模型**：DeepSeek API
+- **工具协议**：MCP Go v0.43.2
+- **编程语言**：Go 1.25
+
+### 项目结构
+```
+Amadeus/
+├── cmd/amadeus/          # 主程序入口
+├── internal/             # 内部核心模块
+│   ├── model/           # AI 模型配置
+│   ├── orchestrator/    # 对话编排器
+│   ├── presentation/    # 输入输出处理
+│   ├── session/         # 会话状态管理
+│   ├── memory/          # 记忆存储
+│   └── tool/            # 工具集成层
+├── tools/               # 工具配置文件
+├── checkpoints/         # 对话历史存储
+├── docs/               # 项目文档
+└── utils/              # 工具函数
+```
+
+### 运行方式
+项目通过 `go run main.go` 启动，启动后进入交互式 CLI 界面，用户可输入问题与 AI 助手进行对话。
+
+### 配置管理
+- API 密钥通过环境变量或 .env 文件配置
+- 工具配置在 `tools/toolsConfig.json` 中定义
+- 对话历史自动保存到 checkpoints 目录
+
+这是一个结构清晰的 AI 助手项目，采用模块化设计，便于扩展和维护。
+[2026-04-13 16:08:06] user: 阅读一下当前项目readme文件，总结一下
+[2026-04-13 16:08:23] assistant: 根据README文件，当前项目总结如下：
+
+**项目名称**：Amadeus
+
+**项目类型**：基于Cloudwego Eino框架的AI助手应用
+
+**核心功能**：
+1. 流式对话输出
+2. 支持MCP（Model Context Protocol）工具集成
+3. 内置计算器工具
+4. 对话历史记录管理
+
+**技术栈**：
+- Go 1.25
+- Cloudwego Eino v0.7.32
+- DeepSeek API
+- MCP Go v0.43.2
+
+**项目结构**：
+```
+Amadeus/
+├── agent/          # Agent配置和初始化
+├── checkpoints/    # 对话历史存储
+├── prompt/         # 提示词相关
+├── tools/          # 工具集成（计算器、MCP客户端等）
+└── utils/          # 工具函数（输入、输出、流式处理等）
+```
+
+**配置要求**：
+1. 需要在`agent/agent.go`中配置DeepSeek API密钥和模型参数
+2. 在`tools/toolsConfig.json`中配置MCP工具
+
+**运行方式**：
+- 安装依赖：`go mod download`
+- 运行程序：`go run main.go`
+
+这是一个完整的AI助手应用，支持工具调用和流式对话，使用DeepSeek作为后端模型，具备对话历史管理功能。
