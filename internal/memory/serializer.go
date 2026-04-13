@@ -30,6 +30,7 @@ func parseContextLine(line string) *schema.Message {
 	case "system":
 		role = schema.System
 	default:
+		// 当前文本格式只接受标准会话角色，工具消息会在 M2 的结构化存储里补齐。
 		return nil
 	}
 

@@ -21,6 +21,8 @@ type Executor struct {
 }
 
 func NewExecutor(ctx context.Context, availableTools []einotool.InvokableTool) (*Executor, error) {
+	// 执行器同时维护“运行时调用映射”和“模型可见的工具描述”，
+	// 避免注册表和执行层各自重复扫描工具。
 	toolInfos := make([]*schema.ToolInfo, 0, len(availableTools))
 	toolMap := make(map[string]einotool.InvokableTool, len(availableTools))
 
@@ -50,6 +52,7 @@ func (e *Executor) Execute(ctx context.Context, toolName, arguments string) (Res
 		return Result{}, fmt.Errorf("tool %q not found", toolName)
 	}
 
+	// 工具自身报错时仍然返回结构化 Result，让编排器可以把失败信息作为 tool message 回填给模型。
 	output, err := invokableTool.InvokableRun(ctx, arguments)
 	result := Result{
 		ToolName: toolName,

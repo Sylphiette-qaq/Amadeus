@@ -14,6 +14,7 @@ import (
 func main() {
 	ctx := context.Background()
 
+	// 本地开发默认从 .env 读取密钥和运行参数，生产环境仍可直接依赖外部环境变量。
 	_ = godotenv.Load()
 
 	chatModel := model.GetChatModel(ctx)
@@ -35,6 +36,7 @@ func main() {
 		return
 	}
 
+	// CLI 层只负责读取输入和展示错误，不参与任何编排决策。
 	for {
 		userQuestion, err := presentation.ReadUserInput()
 		if err != nil {
@@ -43,7 +45,7 @@ func main() {
 		}
 		if userQuestion == "" {
 			fmt.Println("没有输入任何内容")
-			return
+			continue
 		}
 
 		if err := orch.HandleTurn(ctx, userQuestion); err != nil {

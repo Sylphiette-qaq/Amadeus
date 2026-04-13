@@ -12,6 +12,7 @@ import (
 const contextFilePath = "./checkpoints/context.txt"
 
 func SaveMessage(role schema.RoleType, content string) {
+	// M1 仍沿用文本落盘，先保证可恢复会话；结构化存储在 M2 再替换。
 	if err := os.MkdirAll("./checkpoints", 0755); err != nil {
 		fmt.Printf("创建目录失败: %v\n", err)
 		return
@@ -50,6 +51,7 @@ func LoadContext() []*schema.Message {
 			continue
 		}
 
+		// 读取历史时对坏行做容错，避免单条损坏导致整个会话无法恢复。
 		msg := parseContextLine(line)
 		if msg != nil {
 			messages = append(messages, msg)

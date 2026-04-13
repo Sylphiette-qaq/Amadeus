@@ -32,6 +32,7 @@ func LoadToolsConfig(filePath string) (*ToolsConfig, error) {
 		return nil, fmt.Errorf("解析配置文件失败: %v", err)
 	}
 
+	// 配置文件只保留占位符，真正的密钥从环境变量展开，避免重新回到明文配置。
 	resolveConfigEnv(&config)
 
 	return &config, nil
@@ -43,6 +44,7 @@ func McpClientFromConfig(ctx context.Context, serverName string, config MCPServe
 		envs = append(envs, fmt.Sprintf("%s=%s", key, value))
 	}
 
+	// 这里使用 stdio MCP client，后续如果接入远程 MCP，只需要替换这一层。
 	cli, err := client.NewStdioMCPClient(config.Command, envs, config.Args...)
 	if err != nil {
 		return nil, fmt.Errorf("创建MCP客户端失败: %v", err)

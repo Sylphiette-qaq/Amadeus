@@ -21,6 +21,7 @@ func GetChatModel(ctx context.Context) *deepseek.ChatModel {
 		log.Fatal("DEEPSEEK_API_KEY is required")
 	}
 
+	// model 层只负责创建底层 ChatModel，不绑定工具也不承接业务编排。
 	chatModel, err := deepseek.NewChatModel(ctx, &deepseek.ChatModelConfig{
 		APIKey:  apiKey,
 		Model:   getenvDefault("DEEPSEEK_MODEL", defaultModelType),

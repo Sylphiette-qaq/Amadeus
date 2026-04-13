@@ -6,10 +6,11 @@ import (
 	"os"
 )
 
+var stdinReader = bufio.NewReader(os.Stdin)
+
 func ReadUserInput() (string, error) {
 	fmt.Print("请输入你的问题：")
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
+	input, err := stdinReader.ReadString('\n')
 	if err != nil {
 		return "", err
 	}
