@@ -4,6 +4,7 @@ import (
 	"Amadeus/internal/model"
 	"Amadeus/internal/orchestrator"
 	"Amadeus/internal/presentation"
+	"Amadeus/internal/skill"
 	internaltool "Amadeus/internal/tool"
 	"context"
 	"fmt"
@@ -17,8 +18,20 @@ func main() {
 	// 本地开发默认从 .env 读取密钥和运行参数，生产环境仍可直接依赖外部环境变量。
 	_ = godotenv.Load()
 
+	skillConfig, err := skill.LoadConfig()
+	if err != nil {
+		fmt.Println("初始化 skill 配置失败：", err)
+		return
+	}
+
+	agentMarkdown, err := skill.LoadAgentMarkdown(skillConfig)
+	if err != nil {
+		fmt.Println("加载 agent.md 失败：", err)
+		return
+	}
+
 	chatModel := model.GetChatModel(ctx)
-	availableTools, err := internaltool.LoadInvokableTools(ctx, "./tools/toolsConfig.json")
+	availableTools, err := internaltool.LoadInvokableTools(ctx, "./tools/toolsConfig.json", skillConfig)
 	if err != nil {
 		fmt.Println("初始化工具失败：", err)
 		return
@@ -30,7 +43,7 @@ func main() {
 		return
 	}
 
-	orch, err := orchestrator.New(chatModel, executor, model.SystemMessage)
+	orch, err := orchestrator.New(chatModel, executor, model.BuildSystemMessage(agentMarkdown))
 	if err != nil {
 		fmt.Println("初始化编排器失败：", err)
 		return

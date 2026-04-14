@@ -1,6 +1,7 @@
 package basetools
 
 import (
+	"Amadeus/internal/skill"
 	"bytes"
 	"context"
 	"fmt"
@@ -20,9 +21,10 @@ const (
 	maxBashTimeoutSecond = 60
 )
 
-func Load() []einotool.InvokableTool {
+func Load(cfg skill.Config) []einotool.InvokableTool {
 	return []einotool.InvokableTool{
 		GetBashTool(),
+		GetLoadSkillTool(cfg),
 	}
 }
 

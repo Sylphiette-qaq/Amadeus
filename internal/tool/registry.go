@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"Amadeus/internal/skill"
 	"Amadeus/internal/tool/basetools"
 	"context"
 	"fmt"
@@ -9,8 +10,8 @@ import (
 	einotool "github.com/cloudwego/eino/components/tool"
 )
 
-func LoadInvokableTools(ctx context.Context, configPath string) ([]einotool.InvokableTool, error) {
-	availableTools := basetools.Load()
+func LoadInvokableTools(ctx context.Context, configPath string, skillConfig skill.Config) ([]einotool.InvokableTool, error) {
+	availableTools := basetools.Load(skillConfig)
 
 	// 先加载每次都应可用的基础工具，再把 MCP 工具拉平到同一列表。
 	clients, err := CreateMcpClientsFromConfig(ctx, configPath)
