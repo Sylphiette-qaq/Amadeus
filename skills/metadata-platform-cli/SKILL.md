@@ -64,13 +64,15 @@ description: 当用户需要使用 metadata-platform-service-cli 查询支持的
    bin/metadata-platform-service-cli apijson-help --format json
    ```
 
-4. 如果用户要“生成请求体”或“帮忙拼装调用”，先产出 `params` / `body` 草案，不要直接执行
+4. 对 `business-data.query`，优先按 `{"TableName[]": {...}}` 生成查询体
 
-5. 如果 `body_style` 是 `apijson`，并且请求体由 agent 生成、补全或修改，先向用户确认待执行的 APIJSON
+5. 如果用户要“生成请求体”或“帮忙拼装调用”，先产出 `params` / `body` 草案，不要直接执行
 
-6. 只有在需要执行 `invoke` 时，才确认用户是否已经提供 `base_url` 和 `token`；缺少时先向用户索取
+6. 如果 `body_style` 是 `apijson`，并且请求体由 agent 生成、补全或修改，先向用户确认待执行的 APIJSON
 
-7. 用户确认后再调用：
+7. 只有在需要执行 `invoke` 时，才确认用户是否已经提供 `base_url` 和 `token`；缺少时先向用户索取
+
+8. 用户确认后再调用：
    ```bash
    bin/metadata-platform-service-cli invoke \
      --base-url http://127.0.0.1:9501 \
@@ -90,6 +92,7 @@ description: 当用户需要使用 metadata-platform-service-cli 查询支持的
 - 对 agent，优先使用 `api-help --format json`
 - 对动态 `business-data.*` 接口，优先通过 `body_style` / `syntax_ref` 判断是否需要再查 `apijson-help`
 - 对动态 `business-data.*` 接口，优先把工作拆成三步：识别接口 -> 生成 APIJSON -> 用户确认 -> 执行
+- 对 `business-data.query`，优先使用 `{"TableName[]": {...}}` 作为顶层查询体
 - `api-help`、`apijson-help`、`apis` 可以直接执行，不需要用户确认
 - `invoke` 是否需要确认，取决于请求体是否由 agent 推断或生成；其中 APIJSON 一律按高风险处理
 
@@ -115,7 +118,8 @@ description: 当用户需要使用 metadata-platform-service-cli 查询支持的
 动作：
 1. 运行 `api-help --api <name> --format json`
 2. 如果返回 `body_style=apijson`，继续运行 `apijson-help --format json`
-3. 先解释接口契约，再决定是否进入“生成”或“执行”
+3. 对 `business-data.query`，明确提示查询体使用 `TableName[]` 顶层 key
+4. 先解释接口契约，再决定是否进入“生成”或“执行”
 
 ### 流程 C：生成调用参数
 
@@ -127,8 +131,9 @@ description: 当用户需要使用 metadata-platform-service-cli 查询支持的
 动作：
 1. 先查 `api-help`
 2. 如有 `apijson`，再查 `apijson-help`
-3. 输出建议的 `params` / `body` / `method`
-4. 不执行 `invoke`，除非用户明确要求
+3. 对 `business-data.query`，优先生成 `{"TableName[]": {...}}` 形式的 body
+4. 输出建议的 `params` / `body` / `method`
+5. 不执行 `invoke`，除非用户明确要求
 
 ### 流程 D：执行调用
 
@@ -231,7 +236,7 @@ bin/metadata-platform-service-cli invoke \
   --base-url http://127.0.0.1:9501 \
   --token "$TOKEN" \
   --api business-data.query \
-  --body '{"resource":"demo_resource","order[]":{"status{}":["pending","approved"],"@column":"id,order_no,status","@order":"created_at-","@offset":0,"@limit":20,"@combine":"status{}","@method":"GET"}}'
+  --body '{"demo_resource[]":{"status{}":["pending","approved"],"@column":"id,order_no,status","@order":"created_at-","@offset":0,"@limit":20,"@combine":"status{}","@method":"GET"}}'
 ```
 
 但对上面这类命令，agent 必须先把 `--body` 展示给用户确认，再执行。
