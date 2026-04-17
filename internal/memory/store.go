@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"Amadeus/internal/skill"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -22,6 +23,7 @@ const (
 	RecordTypeTurnRequest    = "turn_request"
 	RecordTypeModelResponse  = "model_response"
 	RecordTypeTurnError      = "turn_error"
+	RecordTypeLoadedSkill    = "loaded_skill"
 )
 
 type Config struct {
@@ -57,6 +59,16 @@ type TraceRecord struct {
 	Error     string            `json:"error,omitempty"`
 }
 
+type LoadedSkillRecord struct {
+	Type      string `json:"type"`
+	SessionID string `json:"session_id"`
+	Turn      int    `json:"turn"`
+	Timestamp string `json:"timestamp"`
+	SkillName string `json:"skill_name"`
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+}
+
 type Store struct {
 	mu               sync.Mutex
 	now              func() time.Time
@@ -66,6 +78,7 @@ type Store struct {
 	metaPath         string
 	conversationPath string
 	tracePath        string
+	loadedSkillsPath string
 }
 
 func NewStore(cfg Config) (*Store, error) {
@@ -93,6 +106,7 @@ func NewStore(cfg Config) (*Store, error) {
 		metaPath:         filepath.Join(sessionDir, "meta.json"),
 		conversationPath: filepath.Join(sessionDir, "conversation.jsonl"),
 		tracePath:        filepath.Join(sessionDir, "trace.jsonl"),
+		loadedSkillsPath: filepath.Join(sessionDir, "loaded_skills.jsonl"),
 	}
 
 	if err := os.MkdirAll(sessionDir, 0755); err != nil {
@@ -132,6 +146,10 @@ func (s *Store) ConversationPath() string {
 
 func (s *Store) TracePath() string {
 	return s.tracePath
+}
+
+func (s *Store) LoadedSkillsPath() string {
+	return s.loadedSkillsPath
 }
 
 func (s *Store) AppendUserMessage(turn int, message *schema.Message) error {
@@ -180,6 +198,63 @@ func (s *Store) LoadConversation() ([]*schema.Message, error) {
 	}
 
 	return messages, nil
+}
+
+func (s *Store) AppendLoadedSkill(turn int, doc skill.Document) error {
+	return s.appendJSONL(s.loadedSkillsPath, LoadedSkillRecord{
+		Type:      RecordTypeLoadedSkill,
+		SessionID: s.sessionID,
+		Turn:      turn,
+		Timestamp: s.timestamp(),
+		SkillName: doc.Name,
+		Path:      doc.Path,
+		Content:   doc.Content,
+	})
+}
+
+func (s *Store) LoadLoadedSkills() ([]skill.Document, error) {
+	file, err := os.Open(s.loadedSkillsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open loaded skills: %w", err)
+	}
+	defer file.Close()
+
+	var docs []skill.Document
+	seen := make(map[string]struct{})
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+
+		var record LoadedSkillRecord
+		if err := json.Unmarshal(line, &record); err != nil {
+			return nil, fmt.Errorf("parse loaded skill record: %w", err)
+		}
+		if record.Type != RecordTypeLoadedSkill || record.SkillName == "" {
+			continue
+		}
+		if _, ok := seen[record.SkillName]; ok {
+			continue
+		}
+
+		seen[record.SkillName] = struct{}{}
+		docs = append(docs, skill.Document{
+			Name:    record.SkillName,
+			Path:    record.Path,
+			Content: record.Content,
+		})
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan loaded skills: %w", err)
+	}
+
+	return docs, nil
 }
 
 func (s *Store) AppendTurnRequest(turn int, messages []*schema.Message) error {

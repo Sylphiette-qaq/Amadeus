@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"Amadeus/internal/presentation"
 	"Amadeus/internal/session"
+	"Amadeus/internal/skill"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,10 +19,14 @@ func (o *Orchestrator) handleTurn(ctx context.Context, userQuestion string) erro
 	if err != nil {
 		return fmt.Errorf("load conversation history: %w", err)
 	}
+	loadedSkills, err := o.store.LoadLoadedSkills()
+	if err != nil {
+		return fmt.Errorf("load loaded skills: %w", err)
+	}
 
 	// 每次用户输入都从“系统消息 + 历史消息 + 当前问题”重建一次会话状态，
 	// 这样后续接入摘要、裁剪或审计字段时有稳定的装配入口。
-	state := session.NewState(history, o.systemText, userQuestion)
+	state := session.NewState(history, loadedSkills, o.systemText, userQuestion)
 	if err := o.store.AppendUserMessage(0, schema.UserMessage(userQuestion)); err != nil {
 		return fmt.Errorf("persist user message: %w", err)
 	}
@@ -66,17 +71,28 @@ func (o *Orchestrator) run(ctx context.Context, state *session.State) (*schema.M
 
 		// assistant 的工具调用消息必须先入历史，再把对应的 tool 消息逐条回填。
 		state.Append(resp)
+		var pendingLoadedSkills []skill.Document
 
 		for _, toolCall := range resp.ToolCalls {
 			presentation.PrintToolCall(toolCall)
 
-			toolMessage, toolErr := o.executeTool(ctx, toolCall, state)
+			toolMessage, loadedSkill, toolErr := o.executeTool(ctx, toolCall, state)
 			if toolErr != nil {
 				return nil, toolErr
 			}
 
 			state.Append(toolMessage)
+			if loadedSkill.Name != "" {
+				pendingLoadedSkills = append(pendingLoadedSkills, loadedSkill)
+			}
 			state.ToolCallCount++
+		}
+		for _, doc := range pendingLoadedSkills {
+			if state.ActivateSkill(doc) {
+				if err := o.store.AppendLoadedSkill(state.CurrentTurn, doc); err != nil {
+					return nil, fmt.Errorf("persist loaded skill %q: %w", doc.Name, err)
+				}
+			}
 		}
 	}
 
@@ -147,20 +163,20 @@ func (o *Orchestrator) streamModelTurn(ctx context.Context, state *session.State
 	return resp, nil
 }
 
-func (o *Orchestrator) executeTool(ctx context.Context, toolCall schema.ToolCall, state *session.State) (*schema.Message, error) {
+func (o *Orchestrator) executeTool(ctx context.Context, toolCall schema.ToolCall, state *session.State) (*schema.Message, skill.Document, error) {
 	// 先校验 arguments 至少是合法 JSON，避免把明显坏输入直接交给工具执行层。
 	if err := ParseToolArguments(toolCall.Function.Arguments); err != nil {
-		return nil, fmt.Errorf("invalid tool arguments for %q: %w", toolCall.Function.Name, err)
+		return nil, skill.Document{}, fmt.Errorf("invalid tool arguments for %q: %w", toolCall.Function.Name, err)
 	}
 
 	result, err := o.executor.Execute(ctx, toolCall.Function.Name, toolCall.Function.Arguments)
 	if err != nil {
-		return nil, err
+		return nil, skill.Document{}, err
 	}
 
 	toolContentBytes, marshalErr := json.Marshal(result)
 	if marshalErr != nil {
-		return nil, fmt.Errorf("marshal tool result for %q: %w", toolCall.Function.Name, marshalErr)
+		return nil, skill.Document{}, fmt.Errorf("marshal tool result for %q: %w", toolCall.Function.Name, marshalErr)
 	}
 
 	// 统一将工具结果包装为 JSON 字符串，便于下一轮模型稳定消费，也为后续结构化存储留接口。
@@ -175,5 +191,26 @@ func (o *Orchestrator) executeTool(ctx context.Context, toolCall schema.ToolCall
 	}
 
 	toolMessage := schema.ToolMessage(toolContent, toolCallID, schema.WithToolName(toolCall.Function.Name))
-	return toolMessage, nil
+	if toolCall.Function.Name != "load_skill" || !result.Success {
+		return toolMessage, skill.Document{}, nil
+	}
+
+	doc, loadErr := parseLoadedSkill(result.Data)
+	if loadErr != nil {
+		return nil, skill.Document{}, fmt.Errorf("parse load_skill result: %w", loadErr)
+	}
+
+	return toolMessage, doc, nil
+}
+
+func parseLoadedSkill(data string) (skill.Document, error) {
+	var doc skill.Document
+	if err := json.Unmarshal([]byte(data), &doc); err != nil {
+		return skill.Document{}, err
+	}
+	if doc.Name == "" || strings.TrimSpace(doc.Content) == "" {
+		return skill.Document{}, fmt.Errorf("incomplete load_skill result")
+	}
+
+	return doc, nil
 }

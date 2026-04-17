@@ -2,6 +2,8 @@ package orchestrator
 
 import (
 	"Amadeus/internal/memory"
+	"Amadeus/internal/session"
+	"Amadeus/internal/skill"
 	internaltool "Amadeus/internal/tool"
 	"context"
 	"encoding/json"
@@ -178,6 +180,184 @@ func TestHandleTurnPersistsTurnError(t *testing.T) {
 	}
 }
 
+func TestHandleTurnPersistsLoadedSkillsAndRestoresThemAcrossTurns(t *testing.T) {
+	store, err := memory.NewStore(memory.Config{
+		RootDir:   t.TempDir(),
+		SessionID: "session-skill",
+		Now:       func() time.Time { return time.Date(2026, 4, 17, 12, 0, 0, 0, time.UTC) },
+	})
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+
+	skillDoc := skill.Document{
+		Name:    "openspec-explore",
+		Path:    "/tmp/openspec-explore/SKILL.md",
+		Content: "# Explore mode",
+	}
+	skillJSON, err := json.Marshal(skillDoc)
+	if err != nil {
+		t.Fatalf("marshal skill doc: %v", err)
+	}
+
+	model := &fakeModel{
+		streams: []streamPlan{
+			{
+				chunks: []*schema.Message{
+					schema.AssistantMessage("", []schema.ToolCall{
+						{
+							ID: "call-skill",
+							Function: schema.FunctionCall{
+								Name:      "load_skill",
+								Arguments: `{"name":"openspec-explore"}`,
+							},
+						},
+					}),
+				},
+			},
+			{
+				chunks: []*schema.Message{
+					schema.AssistantMessage("skill loaded", nil),
+				},
+			},
+			{
+				chunks: []*schema.Message{
+					schema.AssistantMessage("skill still active", nil),
+				},
+			},
+		},
+	}
+	executor := &fakeExecutor{
+		results: map[string]internaltool.Result{
+			"load_skill": {
+				ToolName: "load_skill",
+				Success:  true,
+				Data:     string(skillJSON),
+			},
+		},
+	}
+
+	orch := &Orchestrator{
+		model:      model,
+		executor:   executor,
+		store:      store,
+		maxTurns:   4,
+		systemText: "system prompt",
+	}
+
+	if err := orch.HandleTurn(context.Background(), "use openspec explore"); err != nil {
+		t.Fatalf("HandleTurn(first) error = %v", err)
+	}
+	if err := orch.HandleTurn(context.Background(), "continue"); err != nil {
+		t.Fatalf("HandleTurn(second) error = %v", err)
+	}
+
+	if len(model.calls) != 3 {
+		t.Fatalf("model Stream() call count = %d, want 3", len(model.calls))
+	}
+
+	loadedSkillMessage := session.BuildLoadedSkillMessage(skillDoc)
+	if countMatchingContent(model.calls[1], loadedSkillMessage) != 1 {
+		t.Fatalf("expected loaded skill to be injected into the same turn follow-up request: %+v", model.calls[1])
+	}
+	if !toolMessagePrecedesLoadedSkill(model.calls[1], "load_skill", loadedSkillMessage) {
+		t.Fatalf("expected tool message to precede loaded skill system message in follow-up request: %+v", model.calls[1])
+	}
+	if countMatchingContent(model.calls[2], loadedSkillMessage) != 1 {
+		t.Fatalf("expected loaded skill to be restored on later turns: %+v", model.calls[2])
+	}
+
+	loadedSkills, err := store.LoadLoadedSkills()
+	if err != nil {
+		t.Fatalf("LoadLoadedSkills() error = %v", err)
+	}
+	if len(loadedSkills) != 1 || loadedSkills[0] != skillDoc {
+		t.Fatalf("unexpected loaded skills: %+v", loadedSkills)
+	}
+}
+
+func TestHandleTurnDoesNotDuplicateLoadedSkillContext(t *testing.T) {
+	store, err := memory.NewStore(memory.Config{
+		RootDir:   t.TempDir(),
+		SessionID: "session-skill-dedup",
+		Now:       func() time.Time { return time.Date(2026, 4, 17, 12, 0, 0, 0, time.UTC) },
+	})
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+
+	skillDoc := skill.Document{
+		Name:    "openspec-explore",
+		Path:    "/tmp/openspec-explore/SKILL.md",
+		Content: "# Explore mode",
+	}
+	if err := store.AppendLoadedSkill(1, skillDoc); err != nil {
+		t.Fatalf("AppendLoadedSkill() error = %v", err)
+	}
+
+	skillJSON, err := json.Marshal(skillDoc)
+	if err != nil {
+		t.Fatalf("marshal skill doc: %v", err)
+	}
+
+	model := &fakeModel{
+		streams: []streamPlan{
+			{
+				chunks: []*schema.Message{
+					schema.AssistantMessage("", []schema.ToolCall{
+						{
+							ID: "call-skill",
+							Function: schema.FunctionCall{
+								Name:      "load_skill",
+								Arguments: `{"name":"openspec-explore"}`,
+							},
+						},
+					}),
+				},
+			},
+			{
+				chunks: []*schema.Message{
+					schema.AssistantMessage("already loaded", nil),
+				},
+			},
+		},
+	}
+	executor := &fakeExecutor{
+		results: map[string]internaltool.Result{
+			"load_skill": {
+				ToolName: "load_skill",
+				Success:  true,
+				Data:     string(skillJSON),
+			},
+		},
+	}
+
+	orch := &Orchestrator{
+		model:      model,
+		executor:   executor,
+		store:      store,
+		maxTurns:   3,
+		systemText: "system prompt",
+	}
+
+	if err := orch.HandleTurn(context.Background(), "load it again"); err != nil {
+		t.Fatalf("HandleTurn() error = %v", err)
+	}
+
+	loadedSkillMessage := session.BuildLoadedSkillMessage(skillDoc)
+	if countMatchingContent(model.calls[0], loadedSkillMessage) != 1 {
+		t.Fatalf("expected initial request to contain one loaded skill message: %+v", model.calls[0])
+	}
+	if countMatchingContent(model.calls[1], loadedSkillMessage) != 1 {
+		t.Fatalf("expected follow-up request to still contain one loaded skill message: %+v", model.calls[1])
+	}
+
+	lines := readLines(t, store.LoadedSkillsPath())
+	if len(lines) != 1 {
+		t.Fatalf("loaded skill record count = %d, want 1", len(lines))
+	}
+}
+
 type streamPlan struct {
 	chunks []*schema.Message
 	err    error
@@ -244,6 +424,34 @@ func countRole(messages []*schema.Message, role schema.RoleType) int {
 		}
 	}
 	return count
+}
+
+func countMatchingContent(messages []*schema.Message, content string) int {
+	count := 0
+	for _, message := range messages {
+		if message != nil && message.Content == content {
+			count++
+		}
+	}
+	return count
+}
+
+func toolMessagePrecedesLoadedSkill(messages []*schema.Message, toolName, loadedSkillContent string) bool {
+	toolIndex := -1
+	skillIndex := -1
+	for i, message := range messages {
+		if message == nil {
+			continue
+		}
+		if toolIndex == -1 && message.Role == schema.Tool && message.ToolName == toolName {
+			toolIndex = i
+		}
+		if skillIndex == -1 && message.Role == schema.System && message.Content == loadedSkillContent {
+			skillIndex = i
+		}
+	}
+
+	return toolIndex >= 0 && skillIndex >= 0 && toolIndex < skillIndex
 }
 
 func readLines(t *testing.T, path string) []string {

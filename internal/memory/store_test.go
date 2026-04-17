@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"Amadeus/internal/skill"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -103,6 +104,54 @@ func TestStoreWritesTraceRecords(t *testing.T) {
 	}
 	if last.Type != RecordTypeTurnError || last.Error != "boom" {
 		t.Fatalf("unexpected last trace record: %+v", last)
+	}
+}
+
+func TestStorePersistsLoadedSkillsSeparately(t *testing.T) {
+	now := time.Date(2026, 4, 17, 12, 0, 0, 0, time.UTC)
+	store, err := NewStore(Config{
+		RootDir:   t.TempDir(),
+		SessionID: "skill-test",
+		Now:       func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+
+	doc := skill.Document{
+		Name:    "openspec-explore",
+		Path:    "/tmp/openspec-explore/SKILL.md",
+		Content: "# Explore",
+	}
+	if err := store.AppendLoadedSkill(2, doc); err != nil {
+		t.Fatalf("AppendLoadedSkill() error = %v", err)
+	}
+	if err := store.AppendLoadedSkill(3, doc); err != nil {
+		t.Fatalf("AppendLoadedSkill() duplicate error = %v", err)
+	}
+
+	loaded, err := store.LoadLoadedSkills()
+	if err != nil {
+		t.Fatalf("LoadLoadedSkills() error = %v", err)
+	}
+	if len(loaded) != 1 {
+		t.Fatalf("LoadLoadedSkills() count = %d, want 1", len(loaded))
+	}
+	if loaded[0] != doc {
+		t.Fatalf("unexpected loaded skill: %+v", loaded[0])
+	}
+
+	lines := readJSONLines(t, store.LoadedSkillsPath())
+	if len(lines) != 2 {
+		t.Fatalf("loaded skill record count = %d, want 2", len(lines))
+	}
+
+	var first LoadedSkillRecord
+	if err := json.Unmarshal(lines[0], &first); err != nil {
+		t.Fatalf("unmarshal loaded skill record: %v", err)
+	}
+	if first.Type != RecordTypeLoadedSkill || first.SkillName != doc.Name || first.Content != doc.Content {
+		t.Fatalf("unexpected loaded skill record: %+v", first)
 	}
 }
 
