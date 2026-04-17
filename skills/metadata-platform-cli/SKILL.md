@@ -9,7 +9,7 @@ description: 当用户需要使用 metadata-platform-service-cli 查询支持的
 
 ## 强制规则
 
-- 必须通过 CLI 可执行程序 `metadata-platform-service-cli` 调用；优先使用仓库中的 `bin/metadata-platform-service-cli`
+- 必须通过 CLI 可执行程序 `metadata-platform-service-cli` 调用；优先使用仓库中的 `metadata-platform-service-cli`
 - 禁止使用 `go run .`、`go run main.go` 或任何其他 `go run` 形式
 - 在回复中的命令示例、执行步骤和说明文字里，都不要出现 `go run`
 - 只有在真正执行 `invoke` 时，才需要 `base_url` 和 `token`
@@ -51,17 +51,17 @@ description: 当用户需要使用 metadata-platform-service-cli 查询支持的
 
 1. 不知道 API 名称时，先查：
    ```bash
-   bin/metadata-platform-service-cli apis
+   metadata-platform-service-cli apis
    ```
 
 2. 知道 API 名称后，先看说明：
    ```bash
-   bin/metadata-platform-service-cli api-help --api business-metadata.query --format json
+   metadata-platform-service-cli api-help --api business-metadata.query --format json
    ```
 
 3. 如果 `api-help --format json` 返回中包含 `"body_style": "apijson"`，再看 APIJSON 语法：
    ```bash
-   bin/metadata-platform-service-cli apijson-help --format json
+   metadata-platform-service-cli apijson-help --format json
    ```
 
 4. 对 `business-data.query`，优先按 `{"TableName[]": {...}}` 生成查询体
@@ -74,7 +74,7 @@ description: 当用户需要使用 metadata-platform-service-cli 查询支持的
 
 8. 用户确认后再调用：
    ```bash
-   bin/metadata-platform-service-cli invoke \
+   metadata-platform-service-cli invoke \
      --base-url http://127.0.0.1:9501 \
      --token "$TOKEN" \
      --api business-metadata.query \
@@ -188,20 +188,20 @@ description: 当用户需要使用 metadata-platform-service-cli 查询支持的
 查询 API 说明：
 
 ```bash
-bin/metadata-platform-service-cli api-help --api business-metadata.query --format json
+metadata-platform-service-cli api-help --api business-metadata.query --format json
 ```
 
 查询 APIJSON 语法：
 
 ```bash
-bin/metadata-platform-service-cli apijson-help --format json
+metadata-platform-service-cli apijson-help --format json
 ```
 
 生成但不执行 APIJSON：
 
 ```bash
-bin/metadata-platform-service-cli api-help --api business-data.query --format json
-bin/metadata-platform-service-cli apijson-help --format json
+metadata-platform-service-cli api-help --api business-data.query --format json
+metadata-platform-service-cli apijson-help --format json
 ```
 
 然后把建议的 body 发给用户确认，不要直接运行 `invoke`。
@@ -209,7 +209,7 @@ bin/metadata-platform-service-cli apijson-help --format json
 带路径参数调用：
 
 ```bash
-bin/metadata-platform-service-cli invoke \
+metadata-platform-service-cli invoke \
   --base-url http://127.0.0.1:9501 \
   --token "$TOKEN" \
   --api business-metadata.get \
@@ -219,7 +219,7 @@ bin/metadata-platform-service-cli invoke \
 多 method 调用：
 
 ```bash
-bin/metadata-platform-service-cli invoke \
+metadata-platform-service-cli invoke \
   --base-url http://127.0.0.1:9501 \
   --token "$TOKEN" \
   --api business-data.tcc-confirm \
@@ -230,9 +230,9 @@ bin/metadata-platform-service-cli invoke \
 动态 APIJSON 查询：
 
 ```bash
-bin/metadata-platform-service-cli api-help --api business-data.query --format json
-bin/metadata-platform-service-cli apijson-help --format json
-bin/metadata-platform-service-cli invoke \
+metadata-platform-service-cli api-help --api business-data.query --format json
+metadata-platform-service-cli apijson-help --format json
+metadata-platform-service-cli invoke \
   --base-url http://127.0.0.1:9501 \
   --token "$TOKEN" \
   --api business-data.query \
