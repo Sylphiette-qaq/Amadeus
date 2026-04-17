@@ -1,7 +1,6 @@
 package orchestrator
 
 import (
-	"Amadeus/internal/memory"
 	"Amadeus/internal/presentation"
 	"Amadeus/internal/session"
 	"context"
@@ -15,22 +14,33 @@ import (
 )
 
 func (o *Orchestrator) handleTurn(ctx context.Context, userQuestion string) error {
-	history := memory.LoadContext()
-	memory.SaveMessage(schema.User, userQuestion)
+	history, err := o.store.LoadConversation()
+	if err != nil {
+		return fmt.Errorf("load conversation history: %w", err)
+	}
 
 	// 每次用户输入都从“系统消息 + 历史消息 + 当前问题”重建一次会话状态，
 	// 这样后续接入摘要、裁剪或审计字段时有稳定的装配入口。
 	state := session.NewState(history, o.systemText, userQuestion)
+	if err := o.store.AppendUserMessage(0, schema.UserMessage(userQuestion)); err != nil {
+		return fmt.Errorf("persist user message: %w", err)
+	}
 	presentation.Emit(presentation.Event{
 		Type:    presentation.EventTurnStarted,
 		Content: userQuestion,
 	})
 	finalMessage, err := o.run(ctx, state)
 	if err != nil {
+		if traceErr := o.store.AppendTurnError(state.CurrentTurn, err); traceErr != nil {
+			return fmt.Errorf("persist turn error: %w", traceErr)
+		}
 		return err
 	}
 
-	memory.SaveMessage(finalMessage.Role, finalMessage.Content)
+	if err := o.store.AppendAssistantFinal(state.CurrentTurn, finalMessage); err != nil {
+		return fmt.Errorf("persist final assistant message: %w", err)
+	}
+
 	return nil
 }
 
@@ -74,6 +84,10 @@ func (o *Orchestrator) run(ctx context.Context, state *session.State) (*schema.M
 }
 
 func (o *Orchestrator) streamModelTurn(ctx context.Context, state *session.State) (*schema.Message, error) {
+	if err := o.store.AppendTurnRequest(state.CurrentTurn, state.Messages); err != nil {
+		return nil, fmt.Errorf("persist turn request: %w", err)
+	}
+
 	stream, err := o.model.Stream(ctx, state.Messages)
 	if err != nil {
 		return nil, err
@@ -126,6 +140,9 @@ func (o *Orchestrator) streamModelTurn(ctx context.Context, state *session.State
 			resp.ReasoningContent = extracted
 		}
 	}
+	if err := o.store.AppendModelResponse(state.CurrentTurn, resp); err != nil {
+		return nil, fmt.Errorf("persist model response: %w", err)
+	}
 
 	return resp, nil
 }
@@ -157,5 +174,6 @@ func (o *Orchestrator) executeTool(ctx context.Context, toolCall schema.ToolCall
 		toolCallID = toolCall.Function.Name
 	}
 
-	return schema.ToolMessage(toolContent, toolCallID, schema.WithToolName(toolCall.Function.Name)), nil
+	toolMessage := schema.ToolMessage(toolContent, toolCallID, schema.WithToolName(toolCall.Function.Name))
+	return toolMessage, nil
 }

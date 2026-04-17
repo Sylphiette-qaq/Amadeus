@@ -1,6 +1,7 @@
 package main
 
 import (
+	"Amadeus/internal/memory"
 	"Amadeus/internal/model"
 	"Amadeus/internal/orchestrator"
 	"Amadeus/internal/presentation"
@@ -30,6 +31,16 @@ func main() {
 		return
 	}
 
+	settings := model.ResolveChatModelSettings()
+	store, err := memory.NewStore(memory.Config{
+		Model:   settings.Model,
+		BaseURL: settings.BaseURL,
+	})
+	if err != nil {
+		fmt.Println("初始化会话存储失败：", err)
+		return
+	}
+
 	chatModel := model.GetChatModel(ctx)
 	availableTools, err := internaltool.LoadInvokableTools(ctx, "./tools/toolsConfig.json", skillConfig)
 	if err != nil {
@@ -43,7 +54,7 @@ func main() {
 		return
 	}
 
-	orch, err := orchestrator.New(chatModel, executor, model.BuildSystemMessage(agentMarkdown))
+	orch, err := orchestrator.New(chatModel, executor, store, model.BuildSystemMessage(agentMarkdown))
 	if err != nil {
 		fmt.Println("初始化编排器失败：", err)
 		return

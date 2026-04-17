@@ -1,21 +1,39 @@
 package orchestrator
 
 import (
+	"Amadeus/internal/memory"
 	internaltool "Amadeus/internal/tool"
 	"context"
 	"fmt"
 
 	"github.com/cloudwego/eino-ext/components/model/deepseek"
+	model "github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/schema"
 )
 
+type chatModel interface {
+	BindTools([]*schema.ToolInfo) error
+	Stream(context.Context, []*schema.Message, ...model.Option) (*schema.StreamReader[*schema.Message], error)
+}
+
+type toolExecutor interface {
+	ToolInfos() []*schema.ToolInfo
+	Execute(context.Context, string, string) (internaltool.Result, error)
+}
+
 type Orchestrator struct {
-	model      *deepseek.ChatModel
-	executor   *internaltool.Executor
+	model      chatModel
+	executor   toolExecutor
+	store      *memory.Store
 	maxTurns   int
 	systemText string
 }
 
-func New(model *deepseek.ChatModel, executor *internaltool.Executor, systemText string) (*Orchestrator, error) {
+func New(model *deepseek.ChatModel, executor *internaltool.Executor, store *memory.Store, systemText string) (*Orchestrator, error) {
+	if store == nil {
+		return nil, fmt.Errorf("memory store is required")
+	}
+
 	// 工具在编排器初始化时统一绑定到模型，避免请求过程中反复构建工具描述。
 	if err := model.BindTools(executor.ToolInfos()); err != nil {
 		return nil, fmt.Errorf("bind tools: %w", err)
@@ -24,6 +42,7 @@ func New(model *deepseek.ChatModel, executor *internaltool.Executor, systemText 
 	return &Orchestrator{
 		model:      model,
 		executor:   executor,
+		store:      store,
 		maxTurns:   loadMaxTurns(),
 		systemText: systemText,
 	}, nil
