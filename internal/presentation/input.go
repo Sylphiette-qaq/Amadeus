@@ -9,7 +9,7 @@ import (
 var stdinReader = bufio.NewReader(os.Stdin)
 
 func ReadUserInput() (string, error) {
-	fmt.Print("请输入你的问题：")
+	fmt.Print("\n> ")
 	input, err := stdinReader.ReadString('\n')
 	if err != nil {
 		return "", err

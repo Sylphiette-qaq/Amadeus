@@ -62,7 +62,7 @@ func main() {
 		}
 
 		if err := orch.HandleTurn(ctx, userQuestion); err != nil {
-			fmt.Println("处理请求失败：", err)
+			presentation.PrintTurnError(err)
 		}
 	}
 }

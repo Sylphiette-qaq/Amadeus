@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
+	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -19,12 +21,15 @@ func (o *Orchestrator) handleTurn(ctx context.Context, userQuestion string) erro
 	// 每次用户输入都从“系统消息 + 历史消息 + 当前问题”重建一次会话状态，
 	// 这样后续接入摘要、裁剪或审计字段时有稳定的装配入口。
 	state := session.NewState(history, o.systemText, userQuestion)
+	presentation.Emit(presentation.Event{
+		Type:    presentation.EventTurnStarted,
+		Content: userQuestion,
+	})
 	finalMessage, err := o.run(ctx, state)
 	if err != nil {
 		return err
 	}
 
-	presentation.PrintAssistantResponse(finalMessage.Content)
 	memory.SaveMessage(finalMessage.Role, finalMessage.Content)
 	return nil
 }
@@ -33,9 +38,9 @@ func (o *Orchestrator) run(ctx context.Context, state *session.State) (*schema.M
 	for turn := 1; turn <= o.maxTurns; turn++ {
 		state.CurrentTurn = turn
 
-		resp, err := o.model.Generate(ctx, state.Messages)
+		resp, err := o.streamModelTurn(ctx, state)
 		if err != nil {
-			return nil, fmt.Errorf("model generate failed on turn %d: %w", turn, err)
+			return nil, fmt.Errorf("model stream failed on turn %d: %w", turn, err)
 		}
 
 		if len(resp.ToolCalls) == 0 {
@@ -45,6 +50,7 @@ func (o *Orchestrator) run(ctx context.Context, state *session.State) (*schema.M
 
 			// 没有 tool_calls 且 content 非空时，视为本轮已经得到最终答复。
 			state.Finished = true
+			presentation.Emit(presentation.Event{Type: presentation.EventAssistantFinal})
 			return resp, nil
 		}
 
@@ -65,6 +71,63 @@ func (o *Orchestrator) run(ctx context.Context, state *session.State) (*schema.M
 	}
 
 	return nil, fmt.Errorf("max turns exceeded: %d", o.maxTurns)
+}
+
+func (o *Orchestrator) streamModelTurn(ctx context.Context, state *session.State) (*schema.Message, error) {
+	stream, err := o.model.Stream(ctx, state.Messages)
+	if err != nil {
+		return nil, err
+	}
+
+	var chunks []*schema.Message
+	for {
+		chunk, recvErr := stream.Recv()
+		if recvErr == io.EOF {
+			break
+		}
+		if recvErr != nil {
+			return nil, recvErr
+		}
+		if chunk == nil {
+			continue
+		}
+
+		chunks = append(chunks, chunk)
+		if chunk.ReasoningContent == "" {
+			if extracted, ok := deepseek.GetReasoningContent(chunk); ok {
+				chunk.ReasoningContent = extracted
+			}
+		}
+		if chunk.ReasoningContent != "" {
+			presentation.Emit(presentation.Event{
+				Type:    presentation.EventReasoningDelta,
+				Content: chunk.ReasoningContent,
+			})
+		}
+		if chunk.Content != "" {
+			presentation.Emit(presentation.Event{
+				Type:    presentation.EventAnswerDelta,
+				Content: chunk.Content,
+			})
+		}
+	}
+
+	if len(chunks) == 0 {
+		return nil, fmt.Errorf("empty stream response")
+	}
+
+	resp, err := schema.ConcatMessages(chunks)
+	if err != nil {
+		return nil, fmt.Errorf("concat stream messages: %w", err)
+	}
+
+	if resp.ReasoningContent == "" {
+		if extracted, ok := deepseek.GetReasoningContent(resp); ok {
+			resp.ReasoningContent = extracted
+		}
+	}
+
+	return resp, nil
 }
 
 func (o *Orchestrator) executeTool(ctx context.Context, toolCall schema.ToolCall, state *session.State) (*schema.Message, error) {

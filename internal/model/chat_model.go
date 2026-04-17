@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultModelType = "deepseek-chat"
+	defaultModelType = "deepseek-reasoner"
 	defaultModelURL  = "https://api.deepseek.com"
 )
 
