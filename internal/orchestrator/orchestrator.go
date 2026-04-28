@@ -6,13 +6,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	model "github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 )
 
 type chatModel interface {
 	BindTools([]*schema.ToolInfo) error
+	Generate(context.Context, []*schema.Message, ...model.Option) (*schema.Message, error)
 	Stream(context.Context, []*schema.Message, ...model.Option) (*schema.StreamReader[*schema.Message], error)
 }
 
@@ -27,9 +27,10 @@ type Orchestrator struct {
 	store      *memory.Store
 	maxTurns   int
 	systemText string
+	stream     bool
 }
 
-func New(model *deepseek.ChatModel, executor *internaltool.Executor, store *memory.Store, systemText string) (*Orchestrator, error) {
+func New(model chatModel, executor *internaltool.Executor, store *memory.Store, systemText string, stream bool) (*Orchestrator, error) {
 	if store == nil {
 		return nil, fmt.Errorf("memory store is required")
 	}
@@ -45,6 +46,7 @@ func New(model *deepseek.ChatModel, executor *internaltool.Executor, store *memo
 		store:      store,
 		maxTurns:   loadMaxTurns(),
 		systemText: systemText,
+		stream:     stream,
 	}, nil
 }
 

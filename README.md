@@ -41,10 +41,13 @@ Amadeus/
 
 ## 配置
 
-- 通过环境变量配置模型：
+- 通过环境变量配置 OpenAI-compatible 模型接口：
   - `DEEPSEEK_API_KEY`
-  - `DEEPSEEK_MODEL`，默认 `deepseek-reasoner`
+  - `DEEPSEEK_MODEL`，默认 `deepseek-v4-flash`
   - `DEEPSEEK_BASE_URL`，默认 `https://api.deepseek.com`
+  - `DEEPSEEK_THINKING_TYPE`，默认 `enabled`
+  - `DEEPSEEK_REASONING_EFFORT`，默认 `medium`
+  - `DEEPSEEK_STREAM`，默认 `true`；设为 `false` 时使用非流式输出
 - 启动时会自动从 `.env` 读取本地开发环境变量。
 
 在 `tools/toolsConfig.json` 中配置 MCP 工具。

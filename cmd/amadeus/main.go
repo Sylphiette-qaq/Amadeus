@@ -54,7 +54,7 @@ func main() {
 		return
 	}
 
-	orch, err := orchestrator.New(chatModel, executor, store, model.BuildSystemMessage(agentMarkdown))
+	orch, err := orchestrator.New(chatModel, executor, store, model.BuildSystemMessage(agentMarkdown), settings.Stream)
 	if err != nil {
 		fmt.Println("初始化编排器失败：", err)
 		return

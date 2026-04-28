@@ -10,7 +10,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/cloudwego/eino-ext/components/model/deepseek"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -104,6 +103,33 @@ func (o *Orchestrator) streamModelTurn(ctx context.Context, state *session.State
 		return nil, fmt.Errorf("persist turn request: %w", err)
 	}
 
+	if !o.stream {
+		resp, err := o.model.Generate(ctx, state.Messages)
+		if err != nil {
+			return nil, err
+		}
+		if resp == nil {
+			return nil, fmt.Errorf("empty model response")
+		}
+		if resp.ReasoningContent != "" {
+			presentation.Emit(presentation.Event{
+				Type:    presentation.EventReasoningDelta,
+				Content: resp.ReasoningContent,
+			})
+		}
+		if resp.Content != "" {
+			presentation.Emit(presentation.Event{
+				Type:    presentation.EventAnswerDelta,
+				Content: resp.Content,
+			})
+		}
+		if err := o.store.AppendModelResponse(state.CurrentTurn, resp); err != nil {
+			return nil, fmt.Errorf("persist model response: %w", err)
+		}
+
+		return resp, nil
+	}
+
 	stream, err := o.model.Stream(ctx, state.Messages)
 	if err != nil {
 		return nil, err
@@ -123,11 +149,6 @@ func (o *Orchestrator) streamModelTurn(ctx context.Context, state *session.State
 		}
 
 		chunks = append(chunks, chunk)
-		if chunk.ReasoningContent == "" {
-			if extracted, ok := deepseek.GetReasoningContent(chunk); ok {
-				chunk.ReasoningContent = extracted
-			}
-		}
 		if chunk.ReasoningContent != "" {
 			presentation.Emit(presentation.Event{
 				Type:    presentation.EventReasoningDelta,
@@ -151,11 +172,6 @@ func (o *Orchestrator) streamModelTurn(ctx context.Context, state *session.State
 		return nil, fmt.Errorf("concat stream messages: %w", err)
 	}
 
-	if resp.ReasoningContent == "" {
-		if extracted, ok := deepseek.GetReasoningContent(resp); ok {
-			resp.ReasoningContent = extracted
-		}
-	}
 	if err := o.store.AppendModelResponse(state.CurrentTurn, resp); err != nil {
 		return nil, fmt.Errorf("persist model response: %w", err)
 	}

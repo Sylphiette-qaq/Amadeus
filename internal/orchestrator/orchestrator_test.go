@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -70,6 +71,7 @@ func TestHandleTurnPersistsTraceAndRestoresConversationOnly(t *testing.T) {
 		store:      store,
 		maxTurns:   4,
 		systemText: "system prompt",
+		stream:     true,
 	}
 
 	if err := orch.HandleTurn(context.Background(), "what is 1+1"); err != nil {
@@ -159,6 +161,7 @@ func TestHandleTurnPersistsTurnError(t *testing.T) {
 		store:      store,
 		maxTurns:   2,
 		systemText: "system prompt",
+		stream:     true,
 	}
 
 	err = orch.HandleTurn(context.Background(), "hello")
@@ -243,6 +246,7 @@ func TestHandleTurnPersistsLoadedSkillsAndRestoresThemAcrossTurns(t *testing.T) 
 		store:      store,
 		maxTurns:   4,
 		systemText: "system prompt",
+		stream:     true,
 	}
 
 	if err := orch.HandleTurn(context.Background(), "use openspec explore"); err != nil {
@@ -338,6 +342,7 @@ func TestHandleTurnDoesNotDuplicateLoadedSkillContext(t *testing.T) {
 		store:      store,
 		maxTurns:   3,
 		systemText: "system prompt",
+		stream:     true,
 	}
 
 	if err := orch.HandleTurn(context.Background(), "load it again"); err != nil {
@@ -370,6 +375,27 @@ type fakeModel struct {
 
 func (m *fakeModel) BindTools(_ []*schema.ToolInfo) error {
 	return nil
+}
+
+func (m *fakeModel) Generate(_ context.Context, messages []*schema.Message, _ ...model.Option) (*schema.Message, error) {
+	stream, err := m.Stream(context.Background(), messages)
+	if err != nil {
+		return nil, err
+	}
+
+	var chunks []*schema.Message
+	for {
+		chunk, recvErr := stream.Recv()
+		if errors.Is(recvErr, io.EOF) {
+			break
+		}
+		if recvErr != nil {
+			return nil, recvErr
+		}
+		chunks = append(chunks, chunk)
+	}
+
+	return schema.ConcatMessages(chunks)
 }
 
 func (m *fakeModel) Stream(_ context.Context, messages []*schema.Message, _ ...model.Option) (*schema.StreamReader[*schema.Message], error) {
