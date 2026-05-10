@@ -53,3 +53,7 @@ func New(model chatModel, executor *internaltool.Executor, store *memory.Store, 
 func (o *Orchestrator) HandleTurn(ctx context.Context, userQuestion string) error {
 	return o.handleTurn(ctx, userQuestion)
 }
+
+func (o *Orchestrator) HandleTurnWithResponse(ctx context.Context, userQuestion string) (string, error) {
+	return o.handleTurnWithResponse(ctx, userQuestion)
+}

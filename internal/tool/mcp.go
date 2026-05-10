@@ -68,7 +68,9 @@ func CreateMcpClientsFromConfig(ctx context.Context, configPath string) ([]clien
 	for serverName, serverConfig := range config.MCPServers {
 		cli, err := McpClientFromConfig(ctx, serverName, serverConfig)
 		if err != nil {
-			return nil, fmt.Errorf("创建服务器 %s 的客户端失败: %v", serverName, err)
+			// 单个 MCP server 失败时只记录警告，不阻断其他工具加载。
+			fmt.Printf("警告：MCP server %q 初始化失败，已跳过：%v\n", serverName, err)
+			continue
 		}
 		clients = append(clients, cli)
 	}

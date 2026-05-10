@@ -363,6 +363,46 @@ func TestHandleTurnDoesNotDuplicateLoadedSkillContext(t *testing.T) {
 	}
 }
 
+func TestInjectReasoningContentIntoPayload(t *testing.T) {
+	messages := []*schema.Message{
+		schema.SystemMessage("system"),
+		schema.UserMessage("question"),
+		{
+			Role:             schema.Assistant,
+			ReasoningContent: "need a tool",
+			ToolCalls: []schema.ToolCall{
+				{
+					ID: "call-1",
+					Function: schema.FunctionCall{
+						Name:      "calculator",
+						Arguments: `{"expression":"1+1"}`,
+					},
+				},
+			},
+		},
+		schema.ToolMessage(`{"success":true,"data":"2"}`, "call-1"),
+	}
+	rawBody := []byte(`{"model":"deepseek-v4-flash","messages":[{"role":"system","content":"system"},{"role":"user","content":"question"},{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"calculator","arguments":"{\"expression\":\"1+1\"}"}}]},{"role":"tool","content":"{\"success\":true,\"data\":\"2\"}","tool_call_id":"call-1"}]}`)
+
+	updated, err := injectReasoningContentIntoPayload(context.Background(), messages, rawBody)
+	if err != nil {
+		t.Fatalf("injectReasoningContentIntoPayload() error = %v", err)
+	}
+
+	var payload struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	if err := json.Unmarshal(updated, &payload); err != nil {
+		t.Fatalf("unmarshal updated payload: %v", err)
+	}
+	if got := payload.Messages[2]["reasoning_content"]; got != "need a tool" {
+		t.Fatalf("reasoning_content = %#v, want %q", got, "need a tool")
+	}
+	if _, ok := payload.Messages[1]["reasoning_content"]; ok {
+		t.Fatalf("unexpected reasoning_content on user message: %+v", payload.Messages[1])
+	}
+}
+
 type streamPlan struct {
 	chunks []*schema.Message
 	err    error

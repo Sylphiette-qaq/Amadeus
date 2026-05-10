@@ -1,18 +1,20 @@
 package basetools
 
 import (
-	"Amadeus/internal/skill"
 	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	einotool "github.com/cloudwego/eino/components/tool"
 	toolutils "github.com/cloudwego/eino/components/tool/utils"
 	"github.com/cloudwego/eino/schema"
+
+	"Amadeus/internal/skill"
 )
 
 const (
@@ -21,9 +23,12 @@ const (
 	maxBashTimeoutSecond = 60
 )
 
+var runtimeGOOS = runtime.GOOS
+
 func Load(cfg skill.Config) []einotool.InvokableTool {
 	return []einotool.InvokableTool{
 		GetBashTool(),
+		GetCmdTool(),
 		GetLoadSkillTool(cfg),
 	}
 }
@@ -52,7 +57,43 @@ func GetBashTool() einotool.InvokableTool {
 	return toolutils.NewTool(info, runBash)
 }
 
+func GetCmdTool() einotool.InvokableTool {
+	info := &schema.ToolInfo{
+		Name: "cmd",
+		Desc: "执行本地 Windows cmd 命令。适用于需要 cmd.exe 语义、内置命令、批处理兼容性的本地 Windows 操作。参数 command 为要执行的 cmd 命令；workdir 可选，用于指定执行目录；timeout_seconds 可选，默认 15 秒，最大 60 秒。",
+		ParamsOneOf: schema.NewParamsOneOfByParams(map[string]*schema.ParameterInfo{
+			"command": {
+				Desc:     "要执行的 cmd 命令",
+				Type:     schema.String,
+				Required: true,
+			},
+			"workdir": {
+				Desc: "命令执行目录，支持相对路径或绝对路径；默认当前工作目录",
+				Type: schema.String,
+			},
+			"timeout_seconds": {
+				Desc: "命令超时时间，单位秒；默认 15，最大 60",
+				Type: schema.Integer,
+			},
+		}),
+	}
+
+	return toolutils.NewTool(info, runCmd)
+}
+
 func runBash(ctx context.Context, params map[string]interface{}) (string, error) {
+	return runShellCommand(ctx, params, "bash", "bash", "-lc")
+}
+
+func runCmd(ctx context.Context, params map[string]interface{}) (string, error) {
+	if runtimeGOOS != "windows" {
+		return "", fmt.Errorf("cmd tool is only supported on Windows")
+	}
+
+	return runShellCommand(ctx, params, "cmd", "cmd.exe", "/C")
+}
+
+func runShellCommand(ctx context.Context, params map[string]interface{}, toolName, executable string, fixedArgs ...string) (string, error) {
 	command, err := getRequiredString(params, "command")
 	if err != nil {
 		return "", err
@@ -78,7 +119,8 @@ func runBash(ctx context.Context, params map[string]interface{}) (string, error)
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(runCtx, "bash", "-lc", command)
+	args := append(append([]string{}, fixedArgs...), command)
+	cmd := exec.CommandContext(runCtx, executable, args...)
 	if workdir != "" {
 		cmd.Dir = workdir
 	}
@@ -129,10 +171,10 @@ func runBash(ctx context.Context, params map[string]interface{}) (string, error)
 	}
 
 	if timedOut {
-		return strings.Join(lines, "\n"), fmt.Errorf("bash command timed out after %s", timeout)
+		return strings.Join(lines, "\n"), fmt.Errorf("%s command timed out after %s", toolName, timeout)
 	}
 	if runErr != nil {
-		return strings.Join(lines, "\n"), fmt.Errorf("bash command failed: %w", runErr)
+		return strings.Join(lines, "\n"), fmt.Errorf("%s command failed: %w", toolName, runErr)
 	}
 
 	return strings.Join(lines, "\n"), nil

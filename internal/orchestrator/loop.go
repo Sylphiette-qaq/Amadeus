@@ -1,16 +1,19 @@
 package orchestrator
 
 import (
-	"Amadeus/internal/presentation"
-	"Amadeus/internal/session"
-	"Amadeus/internal/skill"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
+	openaiacl "github.com/cloudwego/eino-ext/libs/acl/openai"
+	model "github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
+
+	"Amadeus/internal/presentation"
+	"Amadeus/internal/session"
+	"Amadeus/internal/skill"
 )
 
 func (o *Orchestrator) handleTurn(ctx context.Context, userQuestion string) error {
@@ -46,6 +49,39 @@ func (o *Orchestrator) handleTurn(ctx context.Context, userQuestion string) erro
 	}
 
 	return nil
+}
+
+func (o *Orchestrator) handleTurnWithResponse(ctx context.Context, userQuestion string) (string, error) {
+	history, err := o.store.LoadConversation()
+	if err != nil {
+		return "", fmt.Errorf("load conversation history: %w", err)
+	}
+	loadedSkills, err := o.store.LoadLoadedSkills()
+	if err != nil {
+		return "", fmt.Errorf("load loaded skills: %w", err)
+	}
+
+	state := session.NewState(history, loadedSkills, o.systemText, userQuestion)
+	if err := o.store.AppendUserMessage(0, schema.UserMessage(userQuestion)); err != nil {
+		return "", fmt.Errorf("persist user message: %w", err)
+	}
+	presentation.Emit(presentation.Event{
+		Type:    presentation.EventTurnStarted,
+		Content: userQuestion,
+	})
+	finalMessage, err := o.run(ctx, state)
+	if err != nil {
+		if traceErr := o.store.AppendTurnError(state.CurrentTurn, err); traceErr != nil {
+			return "", fmt.Errorf("persist turn error: %w", traceErr)
+		}
+		return "", err
+	}
+
+	if err := o.store.AppendAssistantFinal(state.CurrentTurn, finalMessage); err != nil {
+		return "", fmt.Errorf("persist final assistant message: %w", err)
+	}
+
+	return finalMessage.Content, nil
 }
 
 func (o *Orchestrator) run(ctx context.Context, state *session.State) (*schema.Message, error) {
@@ -104,7 +140,7 @@ func (o *Orchestrator) streamModelTurn(ctx context.Context, state *session.State
 	}
 
 	if !o.stream {
-		resp, err := o.model.Generate(ctx, state.Messages)
+		resp, err := o.model.Generate(ctx, state.Messages, withReasoningContentPayload())
 		if err != nil {
 			return nil, err
 		}
@@ -130,7 +166,7 @@ func (o *Orchestrator) streamModelTurn(ctx context.Context, state *session.State
 		return resp, nil
 	}
 
-	stream, err := o.model.Stream(ctx, state.Messages)
+	stream, err := o.model.Stream(ctx, state.Messages, withReasoningContentPayload())
 	if err != nil {
 		return nil, err
 	}
@@ -229,4 +265,54 @@ func parseLoadedSkill(data string) (skill.Document, error) {
 	}
 
 	return doc, nil
+}
+
+func withReasoningContentPayload() model.Option {
+	return openaiacl.WithRequestPayloadModifier(injectReasoningContentIntoPayload)
+}
+
+func injectReasoningContentIntoPayload(_ context.Context, messages []*schema.Message, rawBody []byte) ([]byte, error) {
+	reasoningByIndex := make(map[int]string)
+	for i, message := range messages {
+		if message == nil || message.Role != schema.Assistant || message.ReasoningContent == "" {
+			continue
+		}
+		reasoningByIndex[i] = message.ReasoningContent
+	}
+	if len(reasoningByIndex) == 0 {
+		return rawBody, nil
+	}
+
+	var payload struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	if err := json.Unmarshal(rawBody, &payload); err != nil {
+		return nil, fmt.Errorf("parse model request payload: %w", err)
+	}
+	if len(payload.Messages) != len(messages) {
+		return nil, fmt.Errorf("model request message count mismatch: payload=%d state=%d", len(payload.Messages), len(messages))
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rawBody, &body); err != nil {
+		return nil, fmt.Errorf("parse model request body: %w", err)
+	}
+	rawMessages, ok := body["messages"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("model request payload missing messages array")
+	}
+	for index, reasoning := range reasoningByIndex {
+		message, ok := rawMessages[index].(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("model request message %d is not an object", index)
+		}
+		message["reasoning_content"] = reasoning
+	}
+
+	updated, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal model request payload: %w", err)
+	}
+
+	return updated, nil
 }

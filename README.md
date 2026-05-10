@@ -5,6 +5,7 @@
 ## 功能特性
 
 - 流式对话输出
+- 内置 `bash`、`cmd`、`load_skill` 工具
 - 支持 MCP (Model Context Protocol) 工具集成
 - Skill 注入与按需加载
 - 会话历史与 trace 记录管理
