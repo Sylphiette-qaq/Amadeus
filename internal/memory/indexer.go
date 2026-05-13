@@ -104,7 +104,7 @@ type memoryRow struct {
 }
 
 // memoryFields defines the Milvus collection schema for conversation memory.
-// Uses FloatVector (IP metric) instead of the default BinaryVector (HAMMING).
+// Uses FloatVector (COSINE metric) instead of the default BinaryVector (HAMMING).
 func memoryFields(dim int64) []*entity.Field {
 	return []*entity.Field{
 		entity.NewField().
@@ -200,7 +200,7 @@ func NewIndexer(ctx context.Context, cfg IndexerConfig) (*Indexer, error) {
 		Client:            milvusConn,
 		Collection:        cfg.Collection,
 		Fields:            memoryFields(int64(dim)),
-		MetricType:        milvusindexer.IP,
+		MetricType:        milvusindexer.COSINE,
 		DocumentConverter: memoryDocumentConverter,
 		Embedding:         embedder,
 	})
@@ -209,15 +209,21 @@ func NewIndexer(ctx context.Context, cfg IndexerConfig) (*Indexer, error) {
 		return &Indexer{noop: true}, nil
 	}
 
+	// Use a plain top-k search param without radius/range_filter.
+	// The eino defaultSearchParam sets radius=dim and range_filter=0 which are invalid
+	// for cosine metric and caused Milvus to reject searches with "range_filter out of range".
+	cosineSp, _ := entity.NewIndexAUTOINDEXSearchParam(1)
+
 	ret, err := milvusretriever.NewRetriever(ctx, &milvusretriever.RetrieverConfig{
 		Client:          milvusConn,
 		Collection:      cfg.Collection,
 		VectorField:     "vector",
 		OutputFields:    []string{"content", "metadata"},
-		MetricType:      entity.IP,
+		MetricType:      entity.COSINE,
 		TopK:            5,
 		VectorConverter: memoryVectorConverter,
 		Embedding:       embedder,
+		Sp:              cosineSp,
 	})
 	if err != nil {
 		log.Printf("[memory.Indexer] failed to init Milvus retriever: %v, RAG memory disabled", err)
@@ -285,6 +291,13 @@ func (ix *Indexer) Search(ctx context.Context, query string, topK int) (string, 
 
 	docs, err := ix.milvusRet.Retrieve(ctx, query, opts...)
 	if err != nil {
+		// When the collection is empty, Milvus omits field data for declared output fields
+		// (content, metadata). The SDK then fails with "extra output fields found and result
+		// does not dynamic field" because it cannot fall back to a dynamic column.
+		// Treat this as "no results" rather than a hard error.
+		if strings.Contains(err.Error(), "extra output fields") {
+			return "未找到相关历史记录", nil
+		}
 		return "", fmt.Errorf("检索失败: %w", err)
 	}
 
