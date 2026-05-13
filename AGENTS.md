@@ -99,6 +99,7 @@ DEEPSEEK_THINKING_TYPE=enabled            # 思考模式：enabled / disabled
 DEEPSEEK_REASONING_EFFORT=medium          # 推理强度：low / medium / high
 DEEPSEEK_STREAM=true                      # 是否使用流式输出：true / false
 AMADEUS_MAX_TURNS=8                       # 单次用户输入的最大 tool-call 循环轮次
+AMADEUS_HISTORY_LIMIT=100                 # 加载到上下文的最大历史消息条数（按 Message 计，默认 100）
 
 # Skill 路径（相对路径优先，绝对路径兜底）
 SKILL_AGENT_MD_REL=./skills/agent.md

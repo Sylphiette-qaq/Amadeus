@@ -2,10 +2,26 @@ package session
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 
 	"Amadeus/internal/skill"
 	"github.com/cloudwego/eino/schema"
 )
+
+const defaultHistoryLimit = 100
+
+func loadHistoryLimit() int {
+	raw := os.Getenv("AMADEUS_HISTORY_LIMIT")
+	if raw == "" {
+		return defaultHistoryLimit
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return defaultHistoryLimit
+	}
+	return value
+}
 
 type State struct {
 	Messages       []*schema.Message
@@ -17,6 +33,10 @@ type State struct {
 }
 
 func NewState(history []*schema.Message, loadedSkills []skill.Document, systemText, userQuestion string) *State {
+	limit := loadHistoryLimit()
+	if len(history) > limit {
+		history = history[len(history)-limit:]
+	}
 	messages := make([]*schema.Message, 0, len(history)+len(loadedSkills)+2)
 	messages = append(messages, schema.SystemMessage(systemText))
 	loaded := make(map[string]skill.Document, len(loadedSkills))

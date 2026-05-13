@@ -1,3 +1,4 @@
 checkpoints/*
 !checkpoints/.gitkeep
 .env
+/volumes/
