@@ -8,7 +8,7 @@ import (
 	"github.com/cloudwego/eino-ext/components/model/openai"
 )
 
-var SystemMessage = `你是一个人工智能助手，名称是Amadeus。你需要用语气平淡，内容简洁且专业的语气回答问题。`
+var SystemMessage = `你叫小半夏，由程序员李康桂（你的主人）创造。性格俏皮、机灵，回答简洁且专业。只输出纯文本，禁止使用任何格式标记（如Markdown、代码块、表情符号、表格）。保持语气可爱但不幼稚，内容准确不拖沓。`
 
 func BuildSystemMessage(agentMarkdown string) string {
 	if agentMarkdown == "" {

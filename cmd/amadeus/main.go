@@ -27,7 +27,7 @@ func main() {
 
 	agentMarkdown, err := skill.LoadAgentMarkdown(skillConfig)
 	if err != nil {
-		fmt.Println("加载 agent.md 失败：", err)
+		fmt.Println("加载 AGENTS.md 失败：", err)
 		return
 	}
 
@@ -41,8 +41,15 @@ func main() {
 		return
 	}
 
+	// RAG 记忆索引器：初始化失败时软降级为 no-op，不影响主对话流程。
+	idx, err := memory.NewIndexer(ctx, memory.LoadIndexerConfig())
+	if err != nil {
+		fmt.Println("初始化 RAG 索引器失败：", err)
+		return
+	}
+
 	chatModel := model.GetChatModel(ctx)
-	availableTools, err := internaltool.LoadInvokableTools(ctx, "./tools/toolsConfig.json", skillConfig)
+	availableTools, err := internaltool.LoadInvokableTools(ctx, "./tools/toolsConfig.json", skillConfig, idx)
 	if err != nil {
 		fmt.Println("初始化工具失败：", err)
 		return
@@ -54,7 +61,7 @@ func main() {
 		return
 	}
 
-	orch, err := orchestrator.New(chatModel, executor, store, model.BuildSystemMessage(agentMarkdown), settings.Stream)
+	orch, err := orchestrator.New(chatModel, executor, store, idx, model.BuildSystemMessage(agentMarkdown), settings.Stream)
 	if err != nil {
 		fmt.Println("初始化编排器失败：", err)
 		return

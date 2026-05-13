@@ -25,12 +25,13 @@ type Orchestrator struct {
 	model      chatModel
 	executor   toolExecutor
 	store      *memory.Store
+	indexer    *memory.Indexer
 	maxTurns   int
 	systemText string
 	stream     bool
 }
 
-func New(model chatModel, executor *internaltool.Executor, store *memory.Store, systemText string, stream bool) (*Orchestrator, error) {
+func New(model chatModel, executor *internaltool.Executor, store *memory.Store, indexer *memory.Indexer, systemText string, stream bool) (*Orchestrator, error) {
 	if store == nil {
 		return nil, fmt.Errorf("memory store is required")
 	}
@@ -44,6 +45,7 @@ func New(model chatModel, executor *internaltool.Executor, store *memory.Store, 
 		model:      model,
 		executor:   executor,
 		store:      store,
+		indexer:    indexer,
 		maxTurns:   loadMaxTurns(),
 		systemText: systemText,
 		stream:     stream,

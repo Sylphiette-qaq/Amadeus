@@ -14,6 +14,7 @@ import (
 	toolutils "github.com/cloudwego/eino/components/tool/utils"
 	"github.com/cloudwego/eino/schema"
 
+	"Amadeus/internal/memory"
 	"Amadeus/internal/skill"
 )
 
@@ -25,12 +26,14 @@ const (
 
 var runtimeGOOS = runtime.GOOS
 
-func Load(cfg skill.Config) []einotool.InvokableTool {
-	return []einotool.InvokableTool{
-		GetBashTool(),
-		GetCmdTool(),
+func Load(cfg skill.Config, idx *memory.Indexer) []einotool.InvokableTool {
+	tools := []einotool.InvokableTool{
+		//GetBashTool(),
+		//GetCmdTool(),
 		GetLoadSkillTool(cfg),
+		GetSearchMemoryTool(idx),
 	}
+	return tools
 }
 
 func GetBashTool() einotool.InvokableTool {

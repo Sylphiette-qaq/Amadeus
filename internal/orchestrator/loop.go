@@ -48,6 +48,11 @@ func (o *Orchestrator) handleTurn(ctx context.Context, userQuestion string) erro
 		return fmt.Errorf("persist final assistant message: %w", err)
 	}
 
+	// 异步索引本轮对话，不阻塞用户响应。
+	userMsg := schema.UserMessage(userQuestion)
+	turn := state.CurrentTurn
+	go o.indexer.IndexMessages(context.Background(), o.store.SessionID(), turn, userMsg, finalMessage)
+
 	return nil
 }
 
@@ -80,6 +85,11 @@ func (o *Orchestrator) handleTurnWithResponse(ctx context.Context, userQuestion 
 	if err := o.store.AppendAssistantFinal(state.CurrentTurn, finalMessage); err != nil {
 		return "", fmt.Errorf("persist final assistant message: %w", err)
 	}
+
+	// 异步索引本轮对话，不阻塞响应返回。
+	userMsg := schema.UserMessage(userQuestion)
+	turn := state.CurrentTurn
+	go o.indexer.IndexMessages(context.Background(), o.store.SessionID(), turn, userMsg, finalMessage)
 
 	return finalMessage.Content, nil
 }

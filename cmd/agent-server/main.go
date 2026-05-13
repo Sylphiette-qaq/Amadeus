@@ -34,6 +34,7 @@ type sessionManager struct {
 	ctx        context.Context
 	systemText string
 	executor   *internaltool.Executor
+	indexer    *memory.Indexer
 	settings   model.ChatModelSettings
 }
 
@@ -53,7 +54,7 @@ func (sm *sessionManager) getOrCreate(conversationID string) (*convSession, erro
 
 	// 每个会话使用独立的 chatModel 实例（BindTools 会修改 model 状态）。
 	chatModel := model.GetChatModel(sm.ctx)
-	orch, err := orchestrator.New(chatModel, sm.executor, store, sm.systemText, sm.settings.Stream)
+	orch, err := orchestrator.New(chatModel, sm.executor, store, sm.indexer, sm.systemText, sm.settings.Stream)
 	if err != nil {
 		return nil, fmt.Errorf("create orchestrator for %q: %w", conversationID, err)
 	}
@@ -125,13 +126,18 @@ func main() {
 	}
 	agentMarkdown, err := skill.LoadAgentMarkdown(skillConfig)
 	if err != nil {
-		log.Fatal("加载 agent.md 失败：", err)
+		log.Fatal("加载 AGENTS.md 失败：", err)
 	}
 
 	settings := model.ResolveChatModelSettings()
 
+	idx, err := memory.NewIndexer(ctx, memory.LoadIndexerConfig())
+	if err != nil {
+		log.Fatal("初始化 RAG 索引器失败：", err)
+	}
+
 	initCtx, initCancel := context.WithTimeout(ctx, 30*time.Second)
-	availableTools, err := internaltool.LoadInvokableTools(initCtx, "./tools/toolsConfig.json", skillConfig)
+	availableTools, err := internaltool.LoadInvokableTools(initCtx, "./tools/toolsConfig.json", skillConfig, idx)
 	initCancel()
 	if err != nil {
 		log.Fatal("初始化工具失败：", err)
@@ -145,6 +151,7 @@ func main() {
 		ctx:        ctx,
 		systemText: model.BuildSystemMessage(agentMarkdown),
 		executor:   executor,
+		indexer:    idx,
 		settings:   settings,
 	}
 

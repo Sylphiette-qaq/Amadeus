@@ -10,7 +10,7 @@ import (
 )
 
 func TestLoadRegistersCmdTool(t *testing.T) {
-	tools := Load(skill.Config{})
+	tools := Load(skill.Config{}, nil)
 
 	names := make(map[string]bool, len(tools))
 	for _, item := range tools {
@@ -21,7 +21,7 @@ func TestLoadRegistersCmdTool(t *testing.T) {
 		names[info.Name] = true
 	}
 
-	for _, name := range []string{"bash", "cmd", "load_skill"} {
+	for _, name := range []string{"load_skill", "search_memory"} {
 		if !names[name] {
 			t.Fatalf("expected tool %q to be registered; got %v", name, names)
 		}

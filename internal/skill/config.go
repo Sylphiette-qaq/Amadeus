@@ -23,10 +23,10 @@ func LoadConfig() (Config, error) {
 	agentMDPath, err := resolvePath(
 		os.Getenv(envAgentMDAbs),
 		os.Getenv(envAgentMDRel),
-		"agent.md",
+		"AGENTS.md",
 	)
 	if err != nil {
-		return Config{}, fmt.Errorf("resolve agent.md path: %w", err)
+		return Config{}, fmt.Errorf("resolve AGENTS.md path: %w", err)
 	}
 
 	skillRootPath, err := resolvePath(
@@ -38,7 +38,7 @@ func LoadConfig() (Config, error) {
 		return Config{}, fmt.Errorf("resolve skill root path: %w", err)
 	}
 
-	if err := validateFile(agentMDPath, "agent.md"); err != nil {
+	if err := validateFile(agentMDPath, "AGENTS.md"); err != nil {
 		return Config{}, err
 	}
 
