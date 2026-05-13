@@ -195,7 +195,7 @@ func main() {
 
 	addr := os.Getenv("AGENT_SERVER_ADDR")
 	if addr == "" {
-		addr = ":9000"
+		addr = ":9501"
 	}
 	log.Printf("Agent Server 启动，监听 %s", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {

@@ -69,6 +69,7 @@ func TestIndexer_Search_NilReceiverReturnsError(t *testing.T) {
 func TestLoadIndexerConfig_Defaults(t *testing.T) {
 	// Unset all env vars to test defaults.
 	t.Setenv("OPENAI_EMBEDDING_API_KEY", "")
+	t.Setenv("DEEPSEEK_API_KEY", "")
 	t.Setenv("OPENAI_EMBEDDING_BASE_URL", "")
 	t.Setenv("OPENAI_EMBEDDING_MODEL", "")
 	t.Setenv("MILVUS_ADDRESS", "")
@@ -76,10 +77,10 @@ func TestLoadIndexerConfig_Defaults(t *testing.T) {
 
 	cfg := memory.LoadIndexerConfig()
 
-	if cfg.EmbeddingBaseURL != "https://api.openai.com/v1" {
+	if cfg.EmbeddingBaseURL != "https://api.deepseek.com/v1" {
 		t.Errorf("EmbeddingBaseURL = %q, want default", cfg.EmbeddingBaseURL)
 	}
-	if cfg.EmbeddingModel != "text-embedding-3-small" {
+	if cfg.EmbeddingModel != "deepseek-embedding" {
 		t.Errorf("EmbeddingModel = %q, want default", cfg.EmbeddingModel)
 	}
 	if cfg.MilvusAddress != "localhost:19530" {
@@ -87,6 +88,28 @@ func TestLoadIndexerConfig_Defaults(t *testing.T) {
 	}
 	if cfg.Collection != "amadeus_memory" {
 		t.Errorf("Collection = %q, want default", cfg.Collection)
+	}
+}
+
+func TestLoadIndexerConfig_DeepSeekKeyFallback(t *testing.T) {
+	t.Setenv("OPENAI_EMBEDDING_API_KEY", "")
+	t.Setenv("DEEPSEEK_API_KEY", "sk-deepseek-key")
+
+	cfg := memory.LoadIndexerConfig()
+
+	if cfg.EmbeddingAPIKey != "sk-deepseek-key" {
+		t.Errorf("EmbeddingAPIKey = %q, want DEEPSEEK_API_KEY fallback", cfg.EmbeddingAPIKey)
+	}
+}
+
+func TestLoadIndexerConfig_EmbeddingKeyPriority(t *testing.T) {
+	t.Setenv("OPENAI_EMBEDDING_API_KEY", "sk-embedding-key")
+	t.Setenv("DEEPSEEK_API_KEY", "sk-deepseek-key")
+
+	cfg := memory.LoadIndexerConfig()
+
+	if cfg.EmbeddingAPIKey != "sk-embedding-key" {
+		t.Errorf("EmbeddingAPIKey = %q, want OPENAI_EMBEDDING_API_KEY to take priority", cfg.EmbeddingAPIKey)
 	}
 }
 

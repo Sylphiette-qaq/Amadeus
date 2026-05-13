@@ -18,25 +18,43 @@ import (
 )
 
 const (
-	defaultEmbeddingBaseURL = "https://api.openai.com/v1"
-	defaultEmbeddingModel   = "text-embedding-3-small"
+	defaultEmbeddingBaseURL = "https://open.bigmodel.cn/api/paas/v4"
+	defaultEmbeddingModel   = "embedding-3"
 	defaultMilvusAddress    = "localhost:19530"
 	defaultMilvusCollection = "amadeus_memory"
-	embeddingDim            = 1536
+	defaultEmbeddingDim     = 2048
 	maxContentLength        = 8192
 )
+
+// sessionIDKey is the context key used to propagate the current session ID to tools.
+type sessionIDKey struct{}
+
+// WithSessionID returns a new context carrying the given session ID.
+func WithSessionID(ctx context.Context, sessionID string) context.Context {
+	return context.WithValue(ctx, sessionIDKey{}, sessionID)
+}
+
+// SessionIDFromContext retrieves the session ID injected by WithSessionID.
+// Returns an empty string if no session ID is present.
+func SessionIDFromContext(ctx context.Context) string {
+	v, _ := ctx.Value(sessionIDKey{}).(string)
+	return v
+}
 
 // IndexerConfig holds configuration for the RAG memory indexer.
 type IndexerConfig struct {
 	EmbeddingAPIKey  string
 	EmbeddingBaseURL string
 	EmbeddingModel   string
+	EmbeddingDim     int
 	MilvusAddress    string
 	Collection       string
 }
 
 // LoadIndexerConfig reads RAG configuration from environment variables.
+// Requires OPENAI_EMBEDDING_API_KEY to be explicitly set; if absent, RAG is disabled.
 func LoadIndexerConfig() IndexerConfig {
+	apiKey := os.Getenv("OPENAI_EMBEDDING_API_KEY")
 	baseURL := os.Getenv("OPENAI_EMBEDDING_BASE_URL")
 	if baseURL == "" {
 		baseURL = defaultEmbeddingBaseURL
@@ -44,6 +62,12 @@ func LoadIndexerConfig() IndexerConfig {
 	model := os.Getenv("OPENAI_EMBEDDING_MODEL")
 	if model == "" {
 		model = defaultEmbeddingModel
+	}
+	dim := defaultEmbeddingDim
+	if v := os.Getenv("OPENAI_EMBEDDING_DIMENSIONS"); v != "" {
+		if n, err := fmt.Sscanf(v, "%d", &dim); n != 1 || err != nil {
+			dim = defaultEmbeddingDim
+		}
 	}
 	addr := os.Getenv("MILVUS_ADDRESS")
 	if addr == "" {
@@ -54,9 +78,10 @@ func LoadIndexerConfig() IndexerConfig {
 		col = defaultMilvusCollection
 	}
 	return IndexerConfig{
-		EmbeddingAPIKey:  os.Getenv("OPENAI_EMBEDDING_API_KEY"),
+		EmbeddingAPIKey:  apiKey,
 		EmbeddingBaseURL: baseURL,
 		EmbeddingModel:   model,
+		EmbeddingDim:     dim,
 		MilvusAddress:    addr,
 		Collection:       col,
 	}
@@ -148,10 +173,17 @@ func NewIndexer(ctx context.Context, cfg IndexerConfig) (*Indexer, error) {
 		return &Indexer{noop: true}, nil
 	}
 
+	dim := cfg.EmbeddingDim
+	if dim <= 0 {
+		dim = defaultEmbeddingDim
+	}
+	dimPtr := dim
+
 	embedder, err := embeddingOpenAI.NewEmbedder(ctx, &embeddingOpenAI.EmbeddingConfig{
-		APIKey:  cfg.EmbeddingAPIKey,
-		BaseURL: cfg.EmbeddingBaseURL,
-		Model:   cfg.EmbeddingModel,
+		APIKey:     cfg.EmbeddingAPIKey,
+		BaseURL:    cfg.EmbeddingBaseURL,
+		Model:      cfg.EmbeddingModel,
+		Dimensions: &dimPtr,
 	})
 	if err != nil {
 		log.Printf("[memory.Indexer] failed to create embedder: %v, RAG memory disabled", err)
@@ -167,7 +199,7 @@ func NewIndexer(ctx context.Context, cfg IndexerConfig) (*Indexer, error) {
 	idx, err := milvusindexer.NewIndexer(ctx, &milvusindexer.IndexerConfig{
 		Client:            milvusConn,
 		Collection:        cfg.Collection,
-		Fields:            memoryFields(embeddingDim),
+		Fields:            memoryFields(int64(dim)),
 		MetricType:        milvusindexer.IP,
 		DocumentConverter: memoryDocumentConverter,
 		Embedding:         embedder,
@@ -238,13 +270,20 @@ func (ix *Indexer) IndexMessages(ctx context.Context, sessionID string, turn int
 }
 
 // Search retrieves the top-k most semantically similar historical messages for the given query.
+// If a session ID is present in ctx (via WithSessionID), results are scoped to that session only.
 // Returns a formatted multi-line string, or an error if the service is unavailable.
 func (ix *Indexer) Search(ctx context.Context, query string, topK int) (string, error) {
 	if ix == nil || ix.noop {
 		return "", fmt.Errorf("记忆服务不可用")
 	}
 
-	docs, err := ix.milvusRet.Retrieve(ctx, query, retriever.WithTopK(topK))
+	opts := []retriever.Option{retriever.WithTopK(topK)}
+	if sessionID := SessionIDFromContext(ctx); sessionID != "" {
+		// Filter to the current conversation only using Milvus JSON field syntax.
+		opts = append(opts, milvusretriever.WithFilter(fmt.Sprintf(`metadata["session_id"] == "%s"`, sessionID)))
+	}
+
+	docs, err := ix.milvusRet.Retrieve(ctx, query, opts...)
 	if err != nil {
 		return "", fmt.Errorf("检索失败: %w", err)
 	}

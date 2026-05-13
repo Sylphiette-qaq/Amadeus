@@ -149,7 +149,7 @@ func main() {
 	botID := os.Getenv("QQ_BOT_ID")
 	agentURL := os.Getenv("AGENT_SERVER_URL")
 	if agentURL == "" {
-		agentURL = "http://localhost:9000"
+		agentURL = "http://localhost:9501"
 	}
 
 	if botID == "" {
@@ -239,7 +239,7 @@ func main() {
 		}()
 	})
 
-	addr := ":8080"
+	addr := ":8081"
 	log.Printf("QQ Adapter 启动，监听 %s", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatal(err)

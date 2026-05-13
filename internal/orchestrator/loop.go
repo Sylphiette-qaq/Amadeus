@@ -11,6 +11,7 @@ import (
 	model "github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 
+	"Amadeus/internal/memory"
 	"Amadeus/internal/presentation"
 	"Amadeus/internal/session"
 	"Amadeus/internal/skill"
@@ -25,6 +26,9 @@ func (o *Orchestrator) handleTurn(ctx context.Context, userQuestion string) erro
 	if err != nil {
 		return fmt.Errorf("load loaded skills: %w", err)
 	}
+
+	// Inject session ID into context for conversation-level isolation in tools (e.g. search_memory).
+	ctx = memory.WithSessionID(ctx, o.store.SessionID())
 
 	// 每次用户输入都从“系统消息 + 历史消息 + 当前问题”重建一次会话状态，
 	// 这样后续接入摘要、裁剪或审计字段时有稳定的装配入口。
@@ -65,6 +69,9 @@ func (o *Orchestrator) handleTurnWithResponse(ctx context.Context, userQuestion 
 	if err != nil {
 		return "", fmt.Errorf("load loaded skills: %w", err)
 	}
+
+	// Inject session ID into context for conversation-level isolation in tools (e.g. search_memory).
+	ctx = memory.WithSessionID(ctx, o.store.SessionID())
 
 	state := session.NewState(history, loadedSkills, o.systemText, userQuestion)
 	if err := o.store.AppendUserMessage(0, schema.UserMessage(userQuestion)); err != nil {
