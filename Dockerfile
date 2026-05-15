@@ -22,8 +22,8 @@ WORKDIR /app
 COPY --from=builder /app/agent-server ./agent-server
 COPY --from=builder /app/qq ./qq
 
-# Verify node and npx are available (MCP tools require npx at runtime)
-RUN node --version && npx --version
+# Install bash (required by the bash tool) and verify node/npx
+RUN apk add --no-cache bash && node --version && npx --version && bash --version
 
 # Override node image's entrypoint so docker-compose `command` runs binaries directly
 ENTRYPOINT []
