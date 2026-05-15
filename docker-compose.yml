@@ -9,6 +9,7 @@ services:
     environment:
       - NAPCAT_UID=${NAPCAT_UID:-1000}
       - NAPCAT_GID=${NAPCAT_GID:-1000}
+      - ACCOUNT=3835295802   # 快速登录（-q），跳过二维码
     ports:
       - "3000:3000"   # HTTP API
       - "3001:3001"   # WebSocket
