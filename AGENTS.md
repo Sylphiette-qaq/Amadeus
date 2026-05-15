@@ -228,6 +228,8 @@ f
 | 项目简介 | `README.md` | 功能特性、技术栈、配置项快速参考 |
 | Skill 技术方案 | `docs/skill-technical-proposal.md` | Skill 系统的设计目标、约束与实现思路 |
 | 手工编排执行计划 | `docs/manual-orchestrator-execution-plan.md` | Orchestrator 手工编排的设计记录 |
+| **RAG 记忆系统** | `docs/rag-memory.md` | 向量检索记忆架构、配置、search_memory 工具、降级行为 |
+| **Docker 部署指南** | `docs/docker-deployment.md` | 七服务编排、首次启动、NapCat 配置、持久化、运维命令 |
 | 变更提案目录 | `openspec/changes/` | 各功能点的提案、设计与任务拆分（openspec 格式） |
 | openspec 配置 | `openspec/config.yaml` | openspec schema 与项目上下文配置 |
 | Skill 注册表 | `skills/AGENTS.md` | 当前已注册的所有 skill 名称与说明 |

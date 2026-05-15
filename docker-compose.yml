@@ -44,8 +44,7 @@ services:
     restart: always
     command: /app/agent-server
     env_file: .env
-    ports:
-      - "9501:9501"
+    network_mode: host
     volumes:
       - ./skills:/app/skills           # Skill 定义（热更新）
       - ./tools:/app/tools             # MCP 工具配置
@@ -53,8 +52,6 @@ services:
     depends_on:
       - napcat
       - milvus
-    networks:
-      - amadeus-network
 
   # ── Milvus 向量数据库栈 ────────────────────────────────────────────────────
   etcd:

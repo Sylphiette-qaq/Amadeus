@@ -28,7 +28,7 @@ var runtimeGOOS = runtime.GOOS
 
 func Load(cfg skill.Config, idx *memory.Indexer) []einotool.InvokableTool {
 	tools := []einotool.InvokableTool{
-		//GetBashTool(),
+		GetBashTool(),
 		//GetCmdTool(),
 		GetLoadSkillTool(cfg),
 		GetSearchMemoryTool(idx),
