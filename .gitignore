@@ -2,3 +2,7 @@ checkpoints/*
 !checkpoints/.gitkeep
 .env
 /volumes/
+napcat-data/ntqq/*
+!napcat-data/ntqq/.gitkeep
+napcat-data/config/*
+!napcat-data/config/.gitkeep

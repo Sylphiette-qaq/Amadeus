@@ -1,0 +1,150 @@
+services:
+
+  # ── NapCat：QQ 框架 ─────────────────────────────────────────────────────────
+  napcat:
+    image: mlikiowa/napcat-docker:latest
+    container_name: napcat
+    restart: always
+    mac_address: "02:42:ac:11:00:02"   # 固定 MAC，防止 QQ 重复要求扫码
+    environment:
+      - NAPCAT_UID=${NAPCAT_UID:-1000}
+      - NAPCAT_GID=${NAPCAT_GID:-1000}
+    ports:
+      - "3000:3000"   # HTTP API
+      - "3001:3001"   # WebSocket
+      - "6099:6099"   # WebUI（首次登录扫码）
+    volumes:
+      - ./napcat-data/ntqq:/app/.config/QQ       # QQ 登录数据（必须持久化）
+      - ./napcat-data/config:/app/napcat/config   # NapCat 配置
+    networks:
+      - amadeus-network
+
+  # ── QQ 事件适配器：接收 NapCat webhook，路由至 amadeus-agent ──────────────
+  qq-adapter:
+    image: amadeus
+    build: .
+    container_name: qq-adapter
+    restart: always
+    command: /app/qq
+    env_file: .env
+    ports:
+      - "8081:8081"   # NapCat HTTP 上报地址（在 NapCat WebUI 中配置）
+    depends_on:
+      - napcat
+      - amadeus-agent
+    networks:
+      - amadeus-network
+
+  # ── Amadeus Agent Server：AI 推理 + 工具调用 ──────────────────────────────
+  amadeus-agent:
+    image: amadeus
+    build: .
+    container_name: amadeus-agent
+    restart: always
+    command: /app/agent-server
+    env_file: .env
+    ports:
+      - "9501:9501"
+    volumes:
+      - ./skills:/app/skills           # Skill 定义（热更新）
+      - ./tools:/app/tools             # MCP 工具配置
+      - ./checkpoints:/app/checkpoints # 会话历史持久化
+    depends_on:
+      - napcat
+      - milvus
+    networks:
+      - amadeus-network
+
+  # ── Milvus 向量数据库栈 ────────────────────────────────────────────────────
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.25
+    restart: always
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
+    command: etcd
+      -advertise-client-urls=http://etcd:2379
+      -listen-client-urls=http://0.0.0.0:2379
+      --data-dir=/etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - amadeus-network
+
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
+    restart: always
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "19000:9000"  # MinIO S3 API（宿主机 9000 被占用，改用 19000）
+      - "9001:9001"   # MinIO Web Console
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: ["CMD-SHELL", "mc alias set local http://localhost:9000 minioadmin minioadmin --insecure && mc ready local"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - amadeus-network
+
+  milvus:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v2.5.10
+    restart: always
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MINIO_ACCESS_KEY_ID: minioadmin
+      MINIO_SECRET_ACCESS_KEY: minioadmin
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    depends_on:
+      etcd:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - amadeus-network
+
+  attu:
+    container_name: milvus-attu
+    image: zilliz/attu:v2.5
+    restart: always
+    environment:
+      MILVUS_URL: milvus:19530
+    ports:
+      - "8080:3000"
+    depends_on:
+      milvus:
+        condition: service_healthy
+    networks:
+      - amadeus-network
+
+networks:
+  amadeus-network:
+    driver: bridge

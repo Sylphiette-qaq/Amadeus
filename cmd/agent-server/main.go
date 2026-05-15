@@ -131,7 +131,9 @@ func main() {
 
 	settings := model.ResolveChatModelSettings()
 
-	idx, err := memory.NewIndexer(ctx, memory.LoadIndexerConfig())
+	idxCtx, idxCancel := context.WithTimeout(ctx, 15*time.Second)
+	idx, err := memory.NewIndexer(idxCtx, memory.LoadIndexerConfig())
+	idxCancel()
 	if err != nil {
 		log.Fatal("初始化 RAG 索引器失败：", err)
 	}

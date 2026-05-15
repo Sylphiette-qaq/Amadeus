@@ -10,7 +10,7 @@ const (
 	defaultModelType       = "deepseek-v4-flash"
 	defaultModelURL        = "https://api.deepseek.com"
 	defaultThinkingType    = "enabled"
-	defaultReasoningEffort = "medium"
+	defaultReasoningEffort = "high"
 	defaultStream          = true
 )
 
